@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#080b12">
   <title>AlexGherra — Rekordbox DJ Set Analyzer &amp; Mix Optimizer</title>
-  <link rel="stylesheet" href="./css/rekordbox.css?v=1.0">
+  <link rel="stylesheet" href="./css/rekordbox.css?v=1.1">
 </head>
-<body>
+<body class="ag-pin-locked">
 
   <!-- TOP HEADER -->
   <header class="rb-header">
@@ -25,6 +26,7 @@
         <span id="engineStatusText">Modalità Browser (GitHub Pages • Multi-PC)</span>
       </div>
       <button id="btnShowGuide" class="rb-btn ghost" type="button">📖 Guida Rekordbox</button>
+      <button class="rb-btn ghost sm" type="button" onclick="window.agLockSession && window.agLockSession()" title="Blocca sessione con PIN">🔒 Blocca</button>
     </div>
   </header>
 
@@ -313,7 +315,9 @@
   <!-- TOAST NOTIFICATION -->
   <div id="rbToast" class="rb-toast" role="status" aria-live="polite"></div>
 
-  <script src="./js/profiles_data.js?v=1.0"></script>
-  <script src="./js/rekordbox_app.js?v=1.0"></script>
+  <script src="./js/profiles_data.js?v=1.1"></script>
+  <script src="./js/ag_pin_guard.js?v=1.1"></script>
+  <script src="./js/rekordbox_app.js?v=1.1"></script>
 </body>
 </html>
+

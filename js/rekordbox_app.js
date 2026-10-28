@@ -1908,3 +1908,10 @@ guideModal.addEventListener("click", (e) => {
 
 // Startup
 checkLocalServer();
+window.addEventListener("ag-pin-unlocked", () => {
+  if (state.activePlaylistId) {
+    selectPlaylist(state.activePlaylistId);
+  }
+});
+
+
