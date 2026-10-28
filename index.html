@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080b12">
+  <title>AlexGherra — Rekordbox DJ Set Analyzer &amp; Mix Optimizer</title>
+  <link rel="stylesheet" href="./css/rekordbox.css?v=1.0">
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header class="rb-header">
+    <div class="rb-brand">
+      <span class="rb-brand-dot"></span>
+      <div>
+        <h1 class="rb-title">AG Rekordbox Mix Optimizer</h1>
+        <p class="rb-subtitle">DJSet_Analyzer • DNA Acustico 46-dim • Ruota di Camelot • Sequencer 2-Opt</p>
+      </div>
+    </div>
+
+    <div class="rb-header-actions">
+      <div id="engineStatusBadge" class="engine-badge browser-mode" title="Stato motore di analisi">
+        <span class="engine-dot"></span>
+        <span id="engineStatusText">Modalità Browser (GitHub Pages • Multi-PC)</span>
+      </div>
+      <button id="btnShowGuide" class="rb-btn ghost" type="button">📖 Guida Rekordbox</button>
+    </div>
+  </header>
+
+  <!-- IMPORT BAR -->
+  <section class="rb-import-bar" id="dropZone">
+    <div class="import-group">
+      <label class="rb-btn primary file-label" for="xmlFileInput">
+        <span>📂 Carica <code>rekordbox.xml</code> / <code>.m3u8</code></span>
+        <input id="xmlFileInput" type="file" accept=".xml,.m3u,.m3u8,.txt" multiple hidden>
+      </label>
+
+      <label class="rb-btn secondary file-label" for="audioFolderInput" title="Opzionale: seleziona la cartella dove risiedono i file audio su questo PC per attivare l'analisi spettrale Web Audio DSP e il preascolto">
+        <span>🎧 Collega Cartella Audio PC <small>(DSP Reale + Preview)</small></span>
+        <input id="audioFolderInput" type="file" webkitdirectory directory multiple hidden>
+      </label>
+
+      <button id="btnLoadLocalRb" class="rb-btn accent" type="button" hidden title="Legge direttamente dal server Python locale se attivo su questo Mac/PC">
+        ⚡ Leggi da Server Locale (CLAP GPU)
+      </button>
+
+      <button id="btnLoadDemo" class="rb-btn ghost" type="button" title="Carica una collezione Rekordbox di esempio per testare subito il riordinamento">
+        🧪 Carica Playlist Demo
+      </button>
+    </div>
+
+    <div class="import-status">
+      <span id="loadedSourceInfo">Trascina qui il tuo file <code>rekordbox.xml</code> (da Rekordbox: <em>File → Esporta collezione in formato xml</em>) o una playlist <code>.m3u8</code></span>
+      <span id="linkedAudioBadge" class="audio-linked-pill" hidden>0 file audio collegati</span>
+    </div>
+  </section>
+
+  <!-- MAIN WORKSPACE GRID -->
+  <main class="rb-workspace">
+
+    <!-- LEFT SIDEBAR: REKORDBOX PLAYLIST TREE -->
+    <aside class="rb-sidebar board-column" aria-label="Elenco Playlist Rekordbox">
+      <div class="sidebar-header">
+        <div class="sidebar-title-row">
+          <h2>🎛️ Playlist Rekordbox</h2>
+          <span id="playlistCountBadge" class="count-pill">0</span>
+        </div>
+        <input id="playlistSearchInput" class="rb-input" type="search" placeholder="🔍 Filtra playlist o cartella...">
+      </div>
+
+      <div id="playlistTree" class="playlist-tree">
+        <div class="empty-sidebar-msg">
+          <div class="empty-icon">💿</div>
+          <p>Nessuna libreria caricata.</p>
+          <small>Carica <code>rekordbox.xml</code> o premi <strong>Carica Playlist Demo</strong> per visualizzare tutte le tue playlist.</small>
+        </div>
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL: PLAYLIST ANALYZER & REORDER -->
+    <section class="rb-main-panel board-column">
+
+      <!-- CONTROL CARD: DJSET_ANALYZER OPTIONS -->
+      <div class="analyzer-card">
+        <div class="analyzer-top-row">
+          <div>
+            <div class="active-playlist-eyebrow" id="activePlaylistPath">NESSUNA PLAYLIST SELEZIONATA</div>
+            <h2 class="active-playlist-title" id="activePlaylistTitle">Seleziona una playlist a sinistra</h2>
+          </div>
+
+          <div class="analyzer-cta-group">
+            <button id="btnRunAnalyzer" class="rb-btn run-cta" type="button" disabled>
+              ⚡ Ottimizza Ordine Brani (Mix Perfetto)
+            </button>
+            <button id="btnRunDeepDsp" class="rb-btn secondary" type="button" disabled title="Analizza le frequenze reali (Sub-Bass, Kick, Groove, RMS) dei file audio collegati dal PC">
+              🔬 Analisi Audio DSP (File Locali)
+            </button>
+          </div>
+        </div>
+
+        <div class="analyzer-controls-grid">
+          <div class="ctrl-field">
+            <label for="profileSelect">🧬 Profilo Gusti DJ (AlexGherra DNA)</label>
+            <select id="profileSelect" class="rb-select">
+              <option value="auto">✨ Auto-Rileva dal nome Playlist / Genere</option>
+              <option value="all">🌐 Globale (Tutti i Generi — 175 brani)</option>
+              <option value="tech_house">🔊 Tech House (Groove &amp; Sub-Bass)</option>
+              <option value="house">🏠 House (Warm &amp; Vocal Groove)</option>
+              <option value="funky_house">🎷 Funky House</option>
+              <option value="nu_disco">🪩 Nu Disco</option>
+              <option value="techno">⚡ Techno (Peak Driving)</option>
+              <option value="uk_garage_bassline">🇬🇧 UK Garage / Bassline</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <label for="curveSelect">📈 Progressione Energetica del Set</label>
+            <select id="curveSelect" class="rb-select">
+              <option value="crescendo">🔥 Warm-up → Peak Crescendo (Consigliato)</option>
+              <option value="harmonic">🎹 Pure Harmonic (Priorità Assoluta Camelot)</option>
+              <option value="wave">🌊 Wave Dinamica (Saliscendi Club)</option>
+              <option value="peak">⚡ Peak-Time Costante (Alta Energia Subito)</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <label for="openerSelect">🎯 Brano di Apertura (#1 Opener)</label>
+            <select id="openerSelect" class="rb-select">
+              <option value="auto">🤖 Automatico (Miglior Intro Armonico)</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <label for="filterModeSelect">🧹 Gestione Brani Fuori Profilo</label>
+            <select id="filterModeSelect" class="rb-select">
+              <option value="keep_all">Mantieni tutti i brani (Riordina l'intera playlist)</option>
+              <option value="push_bottom">Sposta i meno affini in fondo alla playlist</option>
+              <option value="exclude_low">Escludi brani sotto soglia (Mostra in Scarti)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- PROGRESS BAR FOR DSP / CLAP ANALYSIS -->
+        <div id="dspProgressBox" class="dsp-progress-box" hidden>
+          <div class="dsp-progress-header">
+            <span id="dspProgressLabel">Analisi spettrale DNA Acustico in corso...</span>
+            <span id="dspProgressPct">0%</span>
+          </div>
+          <div class="dsp-progress-track">
+            <div id="dspProgressFill" class="dsp-progress-fill" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI COMPARISON BAR (BEFORE VS AFTER) -->
+      <div id="kpiGrid" class="kpi-grid" hidden>
+        <div class="kpi-card">
+          <span class="kpi-label">🎹 Fluidità Armonica Camelot</span>
+          <div class="kpi-val-row">
+            <span id="kpiHarmonicVal" class="kpi-val">--%</span>
+            <span id="kpiHarmonicDelta" class="kpi-delta"></span>
+          </div>
+          <small id="kpiHarmonicSub">Transizioni compatibili sulla Ruota di Camelot</small>
+        </div>
+
+        <div class="kpi-card">
+          <span class="kpi-label">🧬 Affinità DNA &amp; Coesione</span>
+          <div class="kpi-val-row">
+            <span id="kpiDnaVal" class="kpi-val">--%</span>
+            <span id="kpiDnaDelta" class="kpi-delta"></span>
+          </div>
+          <small id="kpiDnaSub">Allineamento al profilo preferenze AlexGherra</small>
+        </div>
+
+        <div class="kpi-card">
+          <span class="kpi-label">🥁 Salto BPM Medio (Δ BPM)</span>
+          <div class="kpi-val-row">
+            <span id="kpiBpmDeltaVal" class="kpi-val">--</span>
+            <span id="kpiBpmImprove" class="kpi-delta"></span>
+          </div>
+          <small id="kpiBpmRangeSub">Range BPM della playlist</small>
+        </div>
+
+        <div class="kpi-card">
+          <span class="kpi-label">⏱️ Brani &amp; Durata Mix</span>
+          <div class="kpi-val-row">
+            <span id="kpiTrackCountVal" class="kpi-val">0 brani</span>
+          </div>
+          <small id="kpiDurationSub">Durata complessiva stimata</small>
+        </div>
+      </div>
+
+      <!-- EXPORT & SAVE BAR FOR REKORDBOX -->
+      <div id="exportBar" class="export-bar" hidden>
+        <div class="export-left">
+          <span class="export-badge">✅ Mix Ottimizzato Pronto</span>
+          <label class="checkbox-inline" title="Se attivo, oltre ad aggiornare l'ordine della playlist selezionata, crea anche una copia [MIX PERFECT] nell'XML">
+            <input type="checkbox" id="chkDuplicatePlaylist" checked>
+            <span>Mantieni anche copia <code>[MIX PERFECT]</code> nell'XML</span>
+          </label>
+        </div>
+        <div class="export-actions">
+          <button id="btnExportXml" class="rb-btn success" type="button" title="Scarica il file rekordbox.xml con la playlist riordinata pronta da reimportare in Rekordbox">
+            💾 Scarica <code>rekordbox.xml</code> Aggiornato
+          </button>
+          <button id="btnExportM3u8" class="rb-btn primary" type="button" title="Scarica la playlist .m3u8 con i percorsi originali del PC: trascinala direttamente in Rekordbox!">
+            📀 Scarica Playlist <code>.m3u8</code> (Drag &amp; Drop in Rekordbox)
+          </button>
+          <button id="btnExportJson" class="rb-btn ghost" type="button">
+            📄 Report JSON
+          </button>
+          <button id="btnResetOrder" class="rb-btn ghost" type="button">
+            ↩️ Ordine Originale
+          </button>
+        </div>
+      </div>
+
+      <!-- MINI AUDIO PREVIEW BAR (VISIBLE WHEN PLAYING A LOCAL FILE) -->
+      <div id="miniPlayerBar" class="mini-player-bar" hidden>
+        <div class="mp-info">
+          <span class="mp-badge">🎧 PREVIEW</span>
+          <strong id="mpTitle">--</strong>
+          <span id="mpArtist" class="mp-artist">--</span>
+        </div>
+        <div class="mp-controls">
+          <button id="mpPlayPause" class="rb-btn ghost sm" type="button">⏸ Pausa</button>
+          <button id="mpJumpDrop" class="rb-btn ghost sm" type="button">⏩ Drop (+45s)</button>
+          <input id="mpScrubber" type="range" min="0" max="100" step="0.5" value="0" class="mp-scrubber">
+          <span id="mpTime" class="mp-time">00:00</span>
+        </div>
+        <audio id="previewAudioEl" preload="metadata"></audio>
+      </div>
+
+      <!-- RESPONSIVE TRACKLIST TABLE -->
+      <div tabindex="0" role="region" aria-labelledby="playlist-table-caption" class="table-wrapper">
+        <table id="tracksTable" class="rb-table">
+          <caption id="playlist-table-caption" class="sr-only">Elenco brani della playlist Rekordbox e ordine ottimizzato per il DJ set</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="col-pos">#</th>
+              <th scope="col" class="col-track">Brano &amp; Artista</th>
+              <th scope="col" class="col-camelot">Camelot / Key</th>
+              <th scope="col" class="col-bpm">BPM</th>
+              <th scope="col" class="col-energy">Energia &amp; Club EQ</th>
+              <th scope="col" class="col-dna">DNA Fit</th>
+              <th scope="col" class="col-trans">Transizione → Successivo</th>
+              <th scope="col" class="col-actions">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="tracksTableBody">
+            <tr>
+              <td colspan="8" class="empty-table-cell">
+                Seleziona una playlist dalla barra laterale per visualizzare e ottimizzare i brani.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- REJECTED / EXCLUDED TRACKS ACCORDION (IF FILTER MODE EXCLUDES TRACKS) -->
+      <details id="rejectedBox" class="rejected-box" hidden>
+        <summary>
+          <span>🗑️ Brani Fuori Profilo / Esclusi dal Mix (<span id="rejectedCount">0</span>)</span>
+          <small>Clicca per ispezionare o reinserire nel set</small>
+        </summary>
+        <div id="rejectedList" class="rejected-list"></div>
+      </details>
+
+    </section>
+  </main>
+
+  <!-- MODAL: REKORDBOX GUIDE FOR MULTI-PC -->
+  <div id="guideModal" class="rb-modal" hidden>
+    <div class="rb-modal-card">
+      <div class="rb-modal-header">
+        <h3>📖 Come usare AG Rekordbox Mix Optimizer su qualsiasi PC</h3>
+        <button id="btnCloseGuide" class="rb-btn ghost sm" type="button">✕</button>
+      </div>
+      <div class="rb-modal-body">
+        <ol class="guide-steps">
+          <li>
+            <strong>1. Esporta le tue Playlist da Rekordbox:</strong><br>
+            Apri Rekordbox sul tuo PC/Mac e clicca in alto su <code>File → Esporta collezione in formato xml</code> (oppure clicca col tasto destro su una playlist e scegli <code>Esporta una playlist → .m3u8</code>).
+          </li>
+          <li>
+            <strong>2. Carica il file in questa Web App (GitHub Pages):</strong><br>
+            Clicca su <strong>📂 Carica rekordbox.xml / .m3u8</strong> (o trascina il file nella barra in alto). Vedrai comparire a sinistra <strong>tutte le tue cartelle e playlist di Rekordbox</strong>.
+          </li>
+          <li>
+            <strong>3. (Opzionale) Analisi Audio DSP Reale sui file del PC:</strong><br>
+            Se vuoi che <code>DJSet_Analyzer</code> analizzi anche lo spettro audio reale (Sub-Bass, Kick, Groove, Energia RMS) dei file presenti sul PC oltre ai dati di Rekordbox, clicca su <strong>🎧 Collega Cartella Audio PC</strong> e seleziona la cartella dove tieni i tuoi MP3/WAV/AIFF. L'analisi avviene al 100% nella RAM del browser senza caricare alcun file su internet.
+          </li>
+          <li>
+            <strong>4. Crea il Mix Perfetto:</strong><br>
+            Scegli la playlist a sinistra e premi <strong>⚡ Ottimizza Ordine Brani (Mix Perfetto)</strong>. L'algoritmo calcola l'affinità col tuo <strong>DNA Acustico AlexGherra</strong> e applica il sequenziatore <strong>Camelot Wheel + 2-Opt</strong>.
+          </li>
+          <li>
+            <strong>5. Riporta la Playlist ordinata dentro Rekordbox:</strong><br>
+            <ul>
+              <li><strong>Metodo Rapido (1 secondo):</strong> Premi <strong>📀 Scarica Playlist .m3u8</strong> e trascina il file scaricato direttamente nella colonna <em>Playlist</em> di Rekordbox. Rekordbox riconoscerà subito i tuoi brani mantenendo tutti i tuoi Cue Point, Hot Cue e Beatgrid!</li>
+              <li><strong>Metodo XML Completo:</strong> Premi <strong>💾 Scarica rekordbox.xml Aggiornato</strong>. In Rekordbox vai in <em>Preferenze → Avanzate → Database → Libreria rekordbox xml</em>, seleziona il file scaricato e nella vista albero a sinistra importa la playlist aggiornata con tasto destro → <em>Importa in Collezione</em>.</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+      <div class="rb-modal-footer">
+        <button id="btnCloseGuideFooter" class="rb-btn primary" type="button">Perfetto, ho capito</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="rbToast" class="rb-toast" role="status" aria-live="polite"></div>
+
+  <script src="./js/profiles_data.js?v=1.0"></script>
+  <script src="./js/rekordbox_app.js?v=1.0"></script>
+</body>
+</html>
