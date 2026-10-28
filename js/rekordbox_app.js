@@ -600,16 +600,86 @@ function targetEnergyForPosition(posRatio, minE, maxE, curveMode) {
   return minE + (maxE - minE) * posRatio;
 }
 
+function yieldToBrowser(ms = 35) {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => setTimeout(resolve, ms));
+  });
+}
+
+function setOptimizerProgress(stepNum, pct, telemetryText, titleText = null) {
+  const overlay = document.getElementById("optimizerLoadingOverlay");
+  const titleEl = document.getElementById("optOverlayTitle");
+  const pctEl = document.getElementById("optOverlayPct");
+  const barEl = document.getElementById("optProgressBar");
+  const telEl = document.getElementById("optLiveTelemetry");
+  const stepEls = document.querySelectorAll("#optStepsList .opt-step");
+
+  if (overlay && overlay.hidden) overlay.hidden = false;
+  if (titleText && titleEl) titleEl.textContent = titleText;
+  if (pctEl) pctEl.textContent = `${Math.round(pct)}%`;
+  if (barEl) barEl.value = Math.round(pct);
+  if (telEl && telemetryText) telEl.textContent = telemetryText;
+
+  stepEls.forEach(li => {
+    const s = parseInt(li.dataset.step, 10);
+    const iconEl = li.querySelector(".opt-step-icon");
+    li.classList.remove("active", "done");
+    if (s < stepNum) {
+      li.classList.add("done");
+      if (iconEl) iconEl.textContent = "✅";
+    } else if (s === stepNum) {
+      li.classList.add("active");
+      if (iconEl) iconEl.textContent = "🔄";
+    } else {
+      if (iconEl) iconEl.textContent = "⏳";
+    }
+  });
+}
+
 /**
- * Ordina i brani usando Multi-Start Greedy Nearest Neighbor + 2-Opt Local Search.
+ * Ordina i brani usando Multi-Start Greedy Nearest Neighbor + 2-Opt Local Search
+ * con matrice costi pre-calcolata O(1) e aggiornamenti asincroni non-bloccanti.
  */
-function sequenceDjSetOptimal(tracks, curveMode = "crescendo", fixedOpenerId = "auto") {
+async function sequenceDjSetOptimalAsync(tracks, curveMode = "crescendo", fixedOpenerId = "auto", onProgress = null) {
   const n = tracks.length;
   if (n <= 2) return tracks.slice();
 
   const energies = tracks.map(t => Number(t.energy) || 6.5);
   const minE = Math.min(...energies);
   const maxE = Math.max(...energies);
+  const curveWeight = curveMode === "harmonic" ? 0.15 : 0.45;
+
+  // Pre-calcola matrice N x N dei costi base di coppia (Camelot + BPM + Coesione Timbrica)
+  const basePairCost = Array.from({ length: n }, () => new Float32Array(n));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      basePairCost[i][j] = computePairTransition(tracks[i], tracks[j], 0.5, curveMode).cost;
+    }
+  }
+
+  // Costo di transizione posizionale da indice i a indice j al passo stepIdx (1..n-1)
+  function stepTransitionCost(idxFrom, idxTo, stepIdx) {
+    const ratio = stepIdx / Math.max(1, n - 1);
+    const targetE = targetEnergyForPosition(ratio, minE, maxE, curveMode);
+    const e1 = energies[idxFrom];
+    const e2 = energies[idxTo];
+    let energyPenalty = 0;
+    if (curveMode === "crescendo") {
+      if (e2 < e1 - 0.8) energyPenalty += (e1 - e2) * 0.35;
+      if (Math.abs(e2 - e1) > 2.2) energyPenalty += 0.25;
+    }
+    const eDiff = Math.abs(e2 - targetE);
+    return basePairCost[idxFrom][idxTo] + energyPenalty + eDiff * curveWeight;
+  }
+
+  function evaluateIdxSequenceCost(idxSeq) {
+    let total = 0;
+    for (let s = 0; s < idxSeq.length - 1; s++) {
+      total += stepTransitionCost(idxSeq[s], idxSeq[s + 1], s + 1);
+    }
+    return total;
+  }
 
   // Scelta dei candidati Opener
   let openerIndices = [];
@@ -619,86 +689,83 @@ function sequenceDjSetOptimal(tracks, curveMode = "crescendo", fixedOpenerId = "
   }
 
   if (openerIndices.length === 0) {
-    // Prova fino a 6 candidati opener (ordinati per aderenza all'energia iniziale e alto DNA fit)
     const targetStartE = targetEnergyForPosition(0, minE, maxE, curveMode);
     const rankedStarts = tracks
       .map((t, idx) => ({
         idx,
-        startCost: Math.abs((Number(t.energy) || 6.5) - targetStartE) * 0.7 - (Number(t.dnaFitPct) || 75) * 0.015
+        startCost: Math.abs(energies[idx] - targetStartE) * 0.7 - (Number(t.dnaFitPct) || 75) * 0.015
       }))
       .sort((a, b) => a.startCost - b.startCost);
 
     openerIndices = rankedStarts.slice(0, Math.min(6, n)).map(x => x.idx);
   }
 
-  function evaluateSequenceTotalCost(seq) {
-    let total = 0;
-    for (let i = 0; i < seq.length - 1; i++) {
-      const ratio = (i + 1) / Math.max(1, seq.length - 1);
-      const tr = computePairTransition(seq[i], seq[i + 1], ratio, curveMode);
-      const targetE = targetEnergyForPosition(ratio, minE, maxE, curveMode);
-      const eDiff = Math.abs((Number(seq[i + 1].energy) || 6.5) - targetE);
-      const curveWeight = curveMode === "harmonic" ? 0.15 : 0.45;
-      total += tr.cost + eDiff * curveWeight;
-    }
-    return total;
-  }
-
-  let bestSeq = null;
+  let bestIdxSeq = null;
   let bestCost = Infinity;
 
-  for (const startIdx of openerIndices) {
-    const used = new Array(n).fill(false);
-    const seq = [tracks[startIdx]];
-    used[startIdx] = true;
+  for (let oPos = 0; oPos < openerIndices.length; oPos++) {
+    const startIdx = openerIndices[oPos];
+    const used = new Uint8Array(n);
+    const idxSeq = [startIdx];
+    used[startIdx] = 1;
 
     for (let step = 1; step < n; step++) {
-      const prev = seq[seq.length - 1];
-      const ratio = step / Math.max(1, n - 1);
-      const targetE = targetEnergyForPosition(ratio, minE, maxE, curveMode);
-      const curveWeight = curveMode === "harmonic" ? 0.15 : 0.45;
-
+      const prevIdx = idxSeq[idxSeq.length - 1];
       let bestNextIdx = -1;
       let bestStepCost = Infinity;
 
       for (let j = 0; j < n; j++) {
         if (used[j]) continue;
-        const cand = tracks[j];
-        const tr = computePairTransition(prev, cand, ratio, curveMode);
-        const eDiff = Math.abs((Number(cand.energy) || 6.5) - targetE);
-        const stepCost = tr.cost + eDiff * curveWeight;
-        if (stepCost < bestStepCost) {
-          bestStepCost = stepCost;
+        const sc = stepTransitionCost(prevIdx, j, step);
+        if (sc < bestStepCost) {
+          bestStepCost = sc;
           bestNextIdx = j;
         }
       }
 
       if (bestNextIdx !== -1) {
-        used[bestNextIdx] = true;
-        seq.push(tracks[bestNextIdx]);
+        used[bestNextIdx] = 1;
+        idxSeq.push(bestNextIdx);
       }
     }
 
-    // 2-Opt Local Search Refinement (mantiene fisso l'opener se richiesto)
+    // 2-Opt Local Search Refinement
     const lockFirst = fixedOpenerId && fixedOpenerId !== "auto";
     const startSwapIdx = lockFirst ? 1 : 0;
     let improved = true;
     let iter = 0;
-    let currCost = evaluateSequenceTotalCost(seq);
+    let currCost = evaluateIdxSequenceCost(idxSeq);
+    const maxIter = n > 120 ? 15 : 35;
 
-    while (improved && iter < 40) {
+    while (improved && iter < maxIter) {
       improved = false;
       iter++;
       for (let i = startSwapIdx; i < n - 2; i++) {
         for (let k = i + 1; k < n; k++) {
-          const candidateSeq = seq
-            .slice(0, i)
-            .concat(seq.slice(i, k + 1).reverse(), seq.slice(k + 1));
-          const candCost = evaluateSequenceTotalCost(candidateSeq);
+          // Inverti in-place il segmento [i..k]
+          let l = i, r = k;
+          while (l < r) {
+            const tmp = idxSeq[l];
+            idxSeq[l] = idxSeq[r];
+            idxSeq[r] = tmp;
+            l++;
+            r--;
+          }
+          const candCost = evaluateIdxSequenceCost(idxSeq);
           if (candCost + 1e-4 < currCost) {
-            seq.splice(0, seq.length, ...candidateSeq);
             currCost = candCost;
             improved = true;
+          } else {
+            // Ripristina
+            l = i;
+            r = k;
+            while (l < r) {
+              const tmp = idxSeq[l];
+              idxSeq[l] = idxSeq[r];
+              idxSeq[r] = tmp;
+              l++;
+              r--;
+            }
           }
         }
       }
@@ -706,11 +773,16 @@ function sequenceDjSetOptimal(tracks, curveMode = "crescendo", fixedOpenerId = "
 
     if (currCost < bestCost) {
       bestCost = currCost;
-      bestSeq = seq;
+      bestIdxSeq = idxSeq.slice();
+    }
+
+    if (onProgress) {
+      const subPct = Math.round(((oPos + 1) / openerIndices.length) * 100);
+      await onProgress(oPos + 1, openerIndices.length, iter, subPct);
     }
   }
 
-  return bestSeq || tracks.slice();
+  return bestIdxSeq ? bestIdxSeq.map(i => tracks[i]) : tracks.slice();
 }
 
 function computeSetSummaryMetrics(tracks, curveMode = "crescendo") {
@@ -1058,6 +1130,7 @@ function selectPlaylist(playlistId) {
   activePlaylistPath.textContent = pl.folderPath ? `CARTELLA: ${pl.folderPath}` : "PLAYLIST REKORDBOX";
   activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani)`;
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
+  btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
   btnRunDeepDsp.disabled = state.localAudioFiles.size === 0 || state.currentTracks.length === 0;
 
   populateOpenerSelect(state.originalTracks);
@@ -1081,74 +1154,143 @@ function populateOpenerSelect(tracks) {
 async function runPlaylistOptimizer() {
   if (state.originalTracks.length === 0) return;
 
-  const pl = state.playlists.find(p => p.id === state.activePlaylistId);
-  const plName = pl ? pl.name : "Playlist";
-  const profile = getActiveProfile(plName, state.originalTracks);
-  const curveMode = curveSelect.value;
-  const openerId = openerSelect.value;
-  const filterMode = filterModeSelect.value;
+  const overlay = document.getElementById("optimizerLoadingOverlay");
+  const origBtnHtml = btnRunAnalyzer.innerHTML;
+  btnRunAnalyzer.disabled = true;
+  btnRunAnalyzer.innerHTML = "⏳ Ottimizzazione Mix in corso...";
 
-  // Se ci sono file audio locali collegati e non ancora analizzati via DSP, analizziamoli!
-  if (state.localAudioFiles.size > 0) {
-    await runLocalWebDspOnCurrentPlaylist(false);
-  }
+  try {
+    const pl = state.playlists.find(p => p.id === state.activePlaylistId);
+    const plName = pl ? pl.name : "Playlist";
+    const totalCount = state.originalTracks.length;
 
-  // Ricalcola i punteggi sul profilo corrente
-  const scoredPool = state.originalTracks.map(t => {
-    const copy = { ...t };
-    scoreTrackAgainstProfile(copy, profile);
-    return copy;
-  });
+    // STEP 1: Scoring DNA Acustico & Club EQ
+    setOptimizerProgress(
+      1,
+      15,
+      `Analisi DNA Acustico e Club EQ su ${totalCount} brani di "${plName}"...`,
+      "⚡ Elaborazione Mix Perfetto in corso..."
+    );
+    await yieldToBrowser(60);
 
-  state.beforeMetrics = computeSetSummaryMetrics(
-    scoredPool.map(t => ({ ...t })),
-    curveMode
-  );
+    // Se ci sono file audio locali collegati e non ancora analizzati via DSP, analizziamoli!
+    if (state.localAudioFiles.size > 0) {
+      await runLocalWebDspOnCurrentPlaylist(false);
+    }
 
-  let mainPool = scoredPool;
-  let lowPool = [];
+    const profile = getActiveProfile(plName, state.originalTracks);
+    const curveMode = curveSelect.value;
+    const openerId = openerSelect.value;
+    const filterMode = filterModeSelect.value;
 
-  if (filterMode === "exclude_low" || filterMode === "push_bottom") {
-    for (const t of scoredPool) {
-      if (t.dnaFitPct < 60 && String(t.id) !== String(openerId)) {
-        lowPool.push(t);
+    const scoredPool = state.originalTracks.map(t => {
+      const copy = { ...t };
+      scoreTrackAgainstProfile(copy, profile);
+      return copy;
+    });
+
+    // STEP 2: Matrice Armonica Camelot & Metriche Iniziali
+    setOptimizerProgress(
+      2,
+      38,
+      `Calcolo ${totalCount * (totalCount - 1)} combinazioni Ruota di Camelot e Δ BPM...`
+    );
+    await yieldToBrowser(60);
+
+    state.beforeMetrics = computeSetSummaryMetrics(
+      scoredPool.map(t => ({ ...t })),
+      curveMode
+    );
+
+    let mainPool = scoredPool;
+    let lowPool = [];
+
+    if (filterMode === "exclude_low" || filterMode === "push_bottom") {
+      for (const t of scoredPool) {
+        if (t.dnaFitPct < 60 && String(t.id) !== String(openerId)) {
+          lowPool.push(t);
+        }
+      }
+      if (lowPool.length > 0 && lowPool.length < scoredPool.length - 1) {
+        const lowIds = new Set(lowPool.map(x => x.id));
+        mainPool = scoredPool.filter(x => !lowIds.has(x.id));
       } else {
-        mainPool.push ? null : null;
+        lowPool = [];
       }
     }
-    if (lowPool.length > 0 && lowPool.length < scoredPool.length - 1) {
-      const lowIds = new Set(lowPool.map(x => x.id));
-      mainPool = scoredPool.filter(x => !lowIds.has(x.id));
+
+    // STEP 3: Sequenziamento Multi-Start + 2-Opt Local Search
+    setOptimizerProgress(
+      3,
+      55,
+      `Avvio ottimizzatore 2-Opt su ${mainPool.length} brani (Curva: ${curveMode})...`
+    );
+    await yieldToBrowser(45);
+
+    const orderedMain = await sequenceDjSetOptimalAsync(
+      mainPool,
+      curveMode,
+      openerId,
+      async (candIdx, candTotal, iterCount, subPct) => {
+        const overallPct = 55 + Math.round(subPct * 0.32);
+        setOptimizerProgress(
+          3,
+          overallPct,
+          `Percorso ${candIdx}/${candTotal} • Raffinamento 2-Opt (${iterCount} cicli completati)...`
+        );
+        await yieldToBrowser(25);
+      }
+    );
+
+    if (filterMode === "push_bottom" && lowPool.length > 0) {
+      const orderedLow = await sequenceDjSetOptimalAsync(lowPool, curveMode, "auto");
+      state.currentTracks = [...orderedMain, ...orderedLow];
+      state.rejectedTracks = [];
+    } else if (filterMode === "exclude_low" && lowPool.length > 0) {
+      state.currentTracks = orderedMain;
+      state.rejectedTracks = lowPool;
     } else {
-      lowPool = [];
+      state.currentTracks = orderedMain;
+      state.rejectedTracks = [];
     }
+
+    // STEP 4: Validazione Transizioni e Riepilogo Finale
+    state.isOptimized = true;
+    state.afterMetrics = computeSetSummaryMetrics(state.currentTracks, curveMode);
+
+    const movedTracksCount = state.currentTracks.filter((t, i) => t.originalPosition !== i + 1).length;
+    const deltaHarm = state.afterMetrics.harmonicFlowPct - state.beforeMetrics.harmonicFlowPct;
+    const sign = deltaHarm >= 0 ? `+${deltaHarm}%` : `${deltaHarm}%`;
+
+    setOptimizerProgress(
+      5, // Tutti i 4 step completati con ✅
+      100,
+      ` Completato! ${movedTracksCount} brani riordinati • Fluidità Camelot: ${state.afterMetrics.harmonicFlowPct}% (${sign})`,
+      "✅ Mix Perfetto Generato!"
+    );
+    await yieldToBrowser(260);
+
+    updateKpiDisplay();
+    renderTracksTable();
+    renderRejectedTracks();
+
+    const exportBadgeSummary = document.getElementById("exportBadgeSummary");
+    if (exportBadgeSummary) {
+      exportBadgeSummary.textContent = `✅ Mix Ottimizzato (${movedTracksCount} brani riordinati • Camelot ${state.afterMetrics.harmonicFlowPct}%)`;
+    }
+    exportBar.hidden = false;
+    exportBar.classList.remove("flash-highlight");
+    void exportBar.offsetWidth;
+    exportBar.classList.add("flash-highlight");
+
+    showToast(`⚡ Mix Perfetto pronto! ${movedTracksCount} brani riordinati • Fluidità Camelot: ${state.afterMetrics.harmonicFlowPct}% (${sign})`, 4200);
+  } finally {
+    if (overlay) overlay.hidden = true;
+    btnRunAnalyzer.disabled = false;
+    btnRunAnalyzer.innerHTML = state.isOptimized
+      ? "⚡ Ricalcola Mix Perfetto"
+      : origBtnHtml;
   }
-
-  const orderedMain = sequenceDjSetOptimal(mainPool, curveMode, openerId);
-
-  if (filterMode === "push_bottom" && lowPool.length > 0) {
-    const orderedLow = sequenceDjSetOptimal(lowPool, curveMode, "auto");
-    state.currentTracks = [...orderedMain, ...orderedLow];
-    state.rejectedTracks = [];
-  } else if (filterMode === "exclude_low" && lowPool.length > 0) {
-    state.currentTracks = orderedMain;
-    state.rejectedTracks = lowPool;
-  } else {
-    state.currentTracks = orderedMain;
-    state.rejectedTracks = [];
-  }
-
-  state.isOptimized = true;
-  state.afterMetrics = computeSetSummaryMetrics(state.currentTracks, curveMode);
-
-  updateKpiDisplay();
-  renderTracksTable();
-  renderRejectedTracks();
-  exportBar.hidden = false;
-
-  const deltaHarm = state.afterMetrics.harmonicFlowPct - state.beforeMetrics.harmonicFlowPct;
-  const sign = deltaHarm >= 0 ? `+${deltaHarm}%` : `${deltaHarm}%`;
-  showToast(`⚡ Mix Perfetto calcolato! Fluidità Camelot: ${state.afterMetrics.harmonicFlowPct}% (${sign})`);
 }
 
 // ─── KPI & Table Rendering ───────────────────────────────────────────────────

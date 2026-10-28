@@ -196,7 +196,7 @@
       <!-- EXPORT & SAVE BAR FOR REKORDBOX -->
       <div id="exportBar" class="export-bar" hidden>
         <div class="export-left">
-          <span class="export-badge">✅ Mix Ottimizzato Pronto</span>
+          <span id="exportBadgeSummary" class="export-badge">✅ Mix Ottimizzato Pronto</span>
           <label class="checkbox-inline" title="Se attivo, oltre ad aggiornare l'ordine della playlist selezionata, crea anche una copia [MIX PERFECT] nell'XML">
             <input type="checkbox" id="chkDuplicatePlaylist" checked>
             <span>Mantieni anche copia <code>[MIX PERFECT]</code> nell'XML</span>
@@ -312,12 +312,49 @@
     </div>
   </div>
 
+  <!-- OVERLAY LIVE DI ELABORAZIONE DJSET_ANALYZER -->
+  <div id="optimizerLoadingOverlay" class="opt-overlay" hidden aria-live="polite" role="status">
+    <div class="opt-overlay-card">
+      <div class="opt-spinner-row">
+        <progress aria-label="Elaborazione DJSet_Analyzer in corso" class="loading-spinner"></progress>
+        <div class="opt-head-text">
+          <h3 id="optOverlayTitle">⚡ Elaborazione Mix Perfetto in corso...</h3>
+          <p id="optOverlaySub">Analisi armonica e sequenziamento 2-Opt sulla playlist</p>
+        </div>
+        <span id="optOverlayPct" class="opt-pct-badge">0%</span>
+      </div>
+
+      <progress id="optProgressBar" class="opt-progress-bar" max="100" value="0" aria-labelledby="optOverlayTitle"></progress>
+
+      <ul class="opt-steps-list" id="optStepsList">
+        <li class="opt-step" data-step="1">
+          <span class="opt-step-icon">⏳</span>
+          <span class="opt-step-text">1. Calcolo affinità DNA Acustico &amp; Club EQ sui brani</span>
+        </li>
+        <li class="opt-step" data-step="2">
+          <span class="opt-step-icon">⏳</span>
+          <span class="opt-step-text">2. Costruzione matrice armonica Ruota di Camelot &amp; Δ BPM</span>
+        </li>
+        <li class="opt-step" data-step="3">
+          <span class="opt-step-icon">⏳</span>
+          <span class="opt-step-text">3. Ricerca percorsi Multi-Start &amp; ottimizzazione 2-Opt</span>
+        </li>
+        <li class="opt-step" data-step="4">
+          <span class="opt-step-icon">⏳</span>
+          <span class="opt-step-text">4. Validazione transizioni e generazione ordine finale</span>
+        </li>
+      </ul>
+
+      <div id="optLiveTelemetry" class="opt-telemetry">Preparazione motore di analisi...</div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION -->
   <div id="rbToast" class="rb-toast" role="status" aria-live="polite"></div>
 
-  <script src="./js/profiles_data.js?v=1.1"></script>
-  <script src="./js/ag_pin_guard.js?v=1.1"></script>
-  <script src="./js/rekordbox_app.js?v=1.1"></script>
+  <script src="./js/profiles_data.js?v=1.2"></script>
+  <script src="./js/ag_pin_guard.js?v=1.2"></script>
+  <script src="./js/rekordbox_app.js?v=1.2"></script>
 </body>
 </html>
 
