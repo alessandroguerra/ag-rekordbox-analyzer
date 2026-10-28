@@ -205,10 +205,12 @@ function decodeRekordboxLocation(loc) {
 /**
  * Restituisce un oggetto { score01, distance, label, badgeClass }
  * per la transizione armonica da c1 a c2 sulla Ruota di Camelot.
+ * Include una PENALITÀ PROIBITIVA per salti dissonanti (distanza >= 3 ore, es. 11A -> 6A)
+ * per garantire che l'algoritmo non compia mai salti sgraditi.
  */
 function evaluateCamelotTransition(c1, c2) {
   if (!c1 || !c2 || c1 === "?" || c2 === "?") {
-    return { score01: 0.55, distance: 2.5, label: "Chiave N/D", badgeClass: "warn" };
+    return { score01: 0.50, distance: 3.5, label: "Chiave N/D", badgeClass: "warn" };
   }
   if (c1 === c2) {
     return { score01: 1.0, distance: 0.0, label: `Stessa Chiave (${c1})`, badgeClass: "perfect" };
@@ -221,30 +223,132 @@ function evaluateCamelotTransition(c1, c2) {
   const diff = (n2 - n1 + 12) % 12;
   const clockDist = Math.min(diff, 12 - diff);
 
+  // 1. Quinte perfette adiacenti (±1 ora stesso modo, es. 11A -> 12A o 11A -> 10A)
   if (m1 === m2 && clockDist === 1) {
     const dir = diff === 1 ? "+1" : "-1";
-    return { score01: 0.96, distance: 0.5, label: `Armonico ${dir} (${c1}→${c2})`, badgeClass: "perfect" };
+    return { score01: 0.98, distance: 0.3, label: `Armonico ${dir} (${c1}→${c2})`, badgeClass: "perfect" };
   }
+  // 2. Relativo Maggiore / Minore (stessa ora, cambio modo A<->B, es. 11A <-> 11B)
   if (m1 !== m2 && n1 === n2) {
-    return { score01: 0.94, distance: 0.6, label: `Relativo ${m1}↔${m2} (${c1}→${c2})`, badgeClass: "perfect" };
+    return { score01: 0.96, distance: 0.4, label: `Relativo ${m1}↔${m2} (${c1}→${c2})`, badgeClass: "perfect" };
   }
-  // Diagonal mix (+1/-1 con cambio modo supportato nei cambi energetici)
+  // 3. Diagonale Camelot (±1 ora con cambio modo)
   if (m1 !== m2 && clockDist === 1) {
-    return { score01: 0.80, distance: 1.4, label: `Diagonale (${c1}→${c2})`, badgeClass: "good" };
+    return { score01: 0.85, distance: 1.1, label: `Diagonale (${c1}→${c2})`, badgeClass: "good" };
   }
-  // Energy boost (+2 o +7 ore stesso modo)
+  // 4. Energy Boost (+2 ore o +7 semitoni stesso modo)
   if (m1 === m2 && (diff === 2 || diff === 7)) {
     return { score01: 0.82, distance: 1.3, label: `Energy Boost (${c1}→${c2})`, badgeClass: "good" };
   }
+  // 5. Passo di 2 ore stesso modo (compatibile nei cambi di set)
   if (m1 === m2 && clockDist === 2) {
-    return { score01: 0.72, distance: 1.8, label: `Compatibile ±2 (${c1}→${c2})`, badgeClass: "good" };
+    return { score01: 0.68, distance: 2.2, label: `Compatibile ±2 (${c1}→${c2})`, badgeClass: "good" };
   }
+
+  // 6. SALTO NON ARMONICO / DISSONANTE (Distanza >= 3 ore, es. 11A -> 6A è un salto di 5 ore!)
+  // Hard penalty: barriera invalicabile per l'ottimizzatore
+  const prohibitiveDist = 80.0 + clockDist * 25.0 + (m1 !== m2 ? 15.0 : 0.0);
   return {
-    score01: Math.max(0.15, 0.65 - clockDist * 0.1),
-    distance: 2.5 + clockDist * 0.6,
-    label: `Salto Chiave (${c1}→${c2})`,
-    badgeClass: "warn"
+    score01: 0.02,
+    distance: prohibitiveDist,
+    label: `Salto Dissonante Proibito (${c1}→${c2})`,
+    badgeClass: "danger"
   };
+}
+
+// ─── Track Vibe & Separator Classification ────────────────────────────────────
+
+/**
+ * Identifica se una traccia è un separatore / dummy placeholder (es. '-------------------------------------------.mp3').
+ */
+function isSeparatorTrack(track) {
+  if (!track) return false;
+  const title = (track.title || "").trim();
+  const artist = (track.artist || "").trim();
+  const local = (track.localPath || track.location || "").toLowerCase();
+  if (/^[-_=\.\s]{3,}$/.test(title)) return true;
+  if (title.includes("----------------") || artist.includes("----------------")) return true;
+  if (local.includes("xxxseparatore") || local.includes("----------------")) return true;
+  if (track.duration && track.duration < 5) return true;
+  return false;
+}
+
+/**
+ * Estrae la vibrazione stilistica sonora del brano analizzando titolo, remix, cartella e genere.
+ */
+function extractTrackVibe(track) {
+  const text = `${track.localPath || ""} ${track.location || ""} ${track.genre || ""} ${track.title || ""} ${track.artist || ""}`.toLowerCase();
+  
+  if (text.includes("funky") || text.includes("fonque") || text.includes("nu disco") || 
+      text.includes("nudisco") || text.includes("disco") || text.includes("the bomb") || 
+      text.includes("piano groove") || text.includes("soulpainters") || text.includes("jackin") ||
+      text.includes("crazibiza") || text.includes("block & crown") || text.includes("hatiras") ||
+      text.includes("djset_funky")) {
+    return "FUNKY_DISCO";
+  }
+  if (text.includes("latintech") || text.includes("latin") || text.includes("tribal") || 
+      text.includes("bongo") || text.includes("mamasitas") || text.includes("la bamba") || 
+      text.includes("bolgheri") || text.includes("días de fiesta") || text.includes("salsa")) {
+    return "LATIN_TRIBAL";
+  }
+  if (text.includes("tekk") || text.includes("darkwave") || text.includes("acid") || 
+      text.includes("industrial") || text.includes("raw") || text.includes("driving") || 
+      text.includes("rave") || text.includes("technordh") || text.includes("hypnotic") || 
+      text.includes("underground 69")) {
+    return "DARK_TEKK";
+  }
+  if (text.includes("bassline") || text.includes("uk garage") || text.includes("ukg") || 
+      text.includes("speed garage") || text.includes("mirage")) {
+    return "BASSLINE_UKG";
+  }
+  if (text.includes("deeptech") || text.includes("deep tech") || text.includes("minimal") || 
+      text.includes("deep water") || text.includes("subtle")) {
+    return "DEEP_MINIMAL";
+  }
+  return "TECH_HOUSE";
+}
+
+const VIBE_LABELS = {
+  "FUNKY_DISCO": "Funky / Disco",
+  "LATIN_TRIBAL": "Latin / Tribal",
+  "DARK_TEKK": "Dark / Tekk / Acid",
+  "BASSLINE_UKG": "Bassline / UKG",
+  "DEEP_MINIMAL": "Deep / Minimal",
+  "TECH_HOUSE": "Tech House"
+};
+
+const VIBE_SPECTRUM_ORDER = {
+  "FUNKY_DISCO": 1,
+  "LATIN_TRIBAL": 2,
+  "TECH_HOUSE": 3,
+  "BASSLINE_UKG": 4,
+  "DEEP_MINIMAL": 5,
+  "DARK_TEKK": 6
+};
+
+/**
+ * Penalità di transizione tra stili/vibrazioni per evitare salti stridenti (es. Funky seguito da Dark Tekk).
+ */
+function computeVibeAffinityPenalty(v1, v2) {
+  if (!v1 || !v2 || v1 === v2) return 0.0;
+  // Scontro severo: Funky / Disco non può toccare Dark / Tekk / Acid
+  if ((v1 === "FUNKY_DISCO" && v2 === "DARK_TEKK") || (v2 === "FUNKY_DISCO" && v1 === "DARK_TEKK")) {
+    return 15.0; // Barriera stilistica
+  }
+  // Scontro medio: Funky vs Bassline UKG
+  if ((v1 === "FUNKY_DISCO" && v2 === "BASSLINE_UKG") || (v2 === "FUNKY_DISCO" && v1 === "BASSLINE_UKG")) {
+    return 8.0;
+  }
+  // Scontro medio: Latin Tribal vs Dark Tekk
+  if ((v1 === "LATIN_TRIBAL" && v2 === "DARK_TEKK") || (v2 === "LATIN_TRIBAL" && v1 === "DARK_TEKK")) {
+    return 7.0;
+  }
+  // Deep Minimal vs Dark Tekk
+  if ((v1 === "DEEP_MINIMAL" && v2 === "DARK_TEKK") || (v2 === "DEEP_MINIMAL" && v1 === "DARK_TEKK")) {
+    return 4.0;
+  }
+  // Con Tech House standard fa da ponte neutro perfetto
+  return 0.3;
 }
 
 // ─── Profiling & Acoustic DNA Scoring ────────────────────────────────────────
@@ -271,52 +375,59 @@ function getActiveProfile(playlistName, tracks) {
 
 /**
  * Stima le metriche Club EQ ed Energia di una traccia (usando i dati DSP reali se analizzati,
- * oppure un modello deterministico basato su BPM, Genere, Cue Points, Rating e Chiave da Rekordbox).
+ * oppure estraendo i tag espliciti -E5-, -E6-, -E7-, -E8- dal nome del file e sintetizzando
+ * il profilo spettrale fedele alla vera vibrazione stilistica).
  */
 function ensureTrackMetrics(track, profile) {
+  // 1. Estrazione Vibe stilistica
+  track.vibe = track.vibe || extractTrackVibe(track);
+
+  // 2. Estrazione Energia esplicita da filename AlexGherra (-E5-, -E6-, -E7-, -E8-)
+  const fn = (track.localPath || track.location || "").split(/[\\/]/).pop() || "";
+  const eMatch = fn.match(/[-_]E([1-9]|10)[-_]/i) || fn.match(/\bE([1-9]|10)\b/i);
+  if (eMatch) {
+    const eLevel = parseInt(eMatch[1], 10);
+    const eMap = { 1: 2.0, 2: 2.8, 3: 3.8, 4: 4.6, 5: 5.3, 6: 6.5, 7: 7.8, 8: 8.8, 9: 9.4, 10: 9.8 };
+    track.energy = eMap[eLevel] || (eLevel * 1.0);
+    track.explicitEnergyTag = `E${eLevel}`;
+  }
+
   if (track.dspAnalyzed && track.metrics) {
     return;
   }
-  const avg = (profile && profile.dna && profile.dna.avg_metrics) || {
-    sub_bass_pct: 29.0,
-    kick_bass_pct: 28.0,
-    low_mid_pct: 18.0,
-    mid_presence_pct: 15.0,
-    high_air_pct: 10.0,
-    percussive_pct: 61.0,
-    pulse_clarity: 0.42,
-    brightness_hz: 2150
-  };
 
-  // Seed deterministico dal titolo+artista per stabilità
-  let hash = 0;
-  const sig = `${track.artist || ""}-${track.title || ""}`;
-  for (let i = 0; i < sig.length; i++) {
-    hash = ((hash << 5) - hash + sig.charCodeAt(i)) | 0;
+  // 3. Sintesi Spettrale coerente col sottogenere/vibe
+  let baseSub = 29.0, baseKick = 28.0, baseMid = 15.0, baseAir = 10.0, baseBright = 2200, basePerc = 64.0;
+  if (track.vibe === "FUNKY_DISCO") {
+    baseSub = 23.0; baseKick = 25.0; baseMid = 22.0; baseAir = 14.0; baseBright = 3100; basePerc = 56.0;
+  } else if (track.vibe === "DARK_TEKK") {
+    baseSub = 35.0; baseKick = 32.0; baseMid = 12.0; baseAir = 7.0; baseBright = 1750; basePerc = 76.0;
+  } else if (track.vibe === "LATIN_TRIBAL") {
+    baseSub = 27.0; baseKick = 27.0; baseMid = 18.0; baseAir = 11.0; baseBright = 2500; basePerc = 78.0;
+  } else if (track.vibe === "DEEP_MINIMAL") {
+    baseSub = 33.0; baseKick = 26.0; baseMid = 16.0; baseAir = 8.0; baseBright = 1900; basePerc = 58.0;
+  } else if (track.vibe === "BASSLINE_UKG") {
+    baseSub = 34.0; baseKick = 29.0; baseMid = 14.0; baseAir = 9.0; baseBright = 2300; basePerc = 70.0;
   }
-  const normHash = ((Math.abs(hash) % 1000) / 1000) - 0.5; // [-0.5, +0.5]
 
   const bpm = Number(track.bpm) || 126;
-  const ratingBonus = ((Number(track.rating) || 0) / 5) * 1.1;
-  const cueBonus = Math.min(1.2, (Number(track.cueCount) || 0) * 0.18);
-  const bpmFactor = Math.max(-1.5, Math.min(2.0, (bpm - 124) * 0.22));
+  const ratingBonus = ((Number(track.rating) || 0) / 5) * 0.8;
+  const cueBonus = Math.min(1.0, (Number(track.cueCount) || 0) * 0.15);
+  const bpmFactor = Math.max(-1.0, Math.min(1.5, (bpm - 124) * 0.20));
 
-  const energy = Math.max(3.5, Math.min(9.6, +(6.2 + bpmFactor + ratingBonus + cueBonus + normHash * 1.1).toFixed(1)));
-  const subBass = +(avg.sub_bass_pct + normHash * 4.5 + (bpm >= 126 ? 1.5 : -1.0)).toFixed(1);
-  const kickBass = +(avg.kick_bass_pct + normHash * 3.8 + cueBonus * 1.2).toFixed(1);
-  const perc = +(avg.percussive_pct + normHash * 6.0 + (bpm >= 125 ? 2.0 : 0)).toFixed(1);
-  const bright = Math.round(avg.brightness_hz + normHash * 320 + (energy - 6.5) * 95);
+  if (!track.energy) {
+    track.energy = Math.max(3.5, Math.min(9.6, +(6.2 + bpmFactor + ratingBonus + cueBonus).toFixed(1)));
+  }
 
-  track.energy = track.energy || energy;
   track.metrics = track.metrics || {
-    sub_bass_pct: subBass,
-    kick_bass_pct: kickBass,
-    low_mid_pct: +(100 - subBass - kickBass - 24).toFixed(1),
-    mid_presence_pct: 14.5,
-    high_air_pct: 9.5,
-    percussive_pct: perc,
-    pulse_clarity: +(0.38 + (energy / 20)).toFixed(2),
-    brightness_hz: bright
+    sub_bass_pct: baseSub,
+    kick_bass_pct: baseKick,
+    low_mid_pct: +(100 - baseSub - baseKick - baseMid - baseAir).toFixed(1),
+    mid_presence_pct: baseMid,
+    high_air_pct: baseAir,
+    percussive_pct: basePerc,
+    pulse_clarity: +(0.40 + (track.energy / 20)).toFixed(2),
+    brightness_hz: baseBright
   };
 }
 
@@ -522,10 +633,11 @@ async function analyzeAudioFileWebDSP(file, existingTrack) {
   };
 }
 
-// ─── Multi-Objective DJ Set Sequencer (Camelot + DNA + Energy + 2-Opt) ───────
+// ─── Multi-Objective DJ Set Sequencer (Camelot + Vibe + DNA + Energy + 2-Opt) ───
 
 function computePairTransition(t1, t2, posRatio, curveMode) {
   const cam = evaluateCamelotTransition(t1.camelot, t2.camelot);
+  const vibePenalty = computeVibeAffinityPenalty(t1.vibe, t2.vibe);
 
   // Delta BPM
   const bpm1 = Number(t1.bpm) || 126;
@@ -543,7 +655,7 @@ function computePairTransition(t1, t2, posRatio, curveMode) {
   const bassDiff = Math.abs(((m1.sub_bass_pct || 28) + (m1.kick_bass_pct || 28)) - ((m2.sub_bass_pct || 28) + (m2.kick_bass_pct || 28)));
   const grooveDiff = Math.abs((m1.percussive_pct || 60) - (m2.percussive_pct || 60));
   const brightDiff = Math.abs((m1.brightness_hz || 2100) - (m2.brightness_hz || 2100)) / 100;
-  const spectralCohesion = Math.max(0.25, Math.min(0.99, 1.0 - (bassDiff * 0.008 + grooveDiff * 0.006 + brightDiff * 0.008)));
+  const spectralCohesion = Math.max(0.20, Math.min(0.99, 1.0 - (bassDiff * 0.008 + grooveDiff * 0.006 + brightDiff * 0.008)));
 
   // Progressione energetica
   const e1 = Number(t1.energy) || 6.5;
@@ -560,23 +672,36 @@ function computePairTransition(t1, t2, posRatio, curveMode) {
     if (Math.abs(e2 - e1) > 2.6) energyPenalty += 0.22;
   }
 
-  // Costo da minimizzare
-  const harmonicWeight = curveMode === "harmonic" ? 3.4 : 2.5;
+  // Costo da minimizzare (Armonia Camelot + Compatibilità Vibe/Stile + BPM + Timbro + Energia)
+  const harmonicWeight = curveMode === "harmonic" ? 4.5 : 3.5;
   const cost =
     cam.distance * harmonicWeight +
-    (1.0 - bpmCompatibility) * 2.2 +
-    (1.0 - spectralCohesion) * 1.4 +
+    vibePenalty * 3.0 +
+    (1.0 - bpmCompatibility) * 2.4 +
+    (1.0 - spectralCohesion) * 1.5 +
     energyPenalty;
 
-  const overallCompatPct = Math.round(
+  let overallCompatPct = Math.round(
     (cam.score01 * 0.50 + bpmCompatibility * 0.25 + spectralCohesion * 0.25) * 100
   );
+  if (cam.badgeClass === "danger") {
+    overallCompatPct = Math.min(15, overallCompatPct);
+  } else if (vibePenalty >= 10.0) {
+    overallCompatPct = Math.min(25, overallCompatPct);
+  }
+
+  let finalLabel = cam.label;
+  let finalBadge = cam.badgeClass;
+  if (vibePenalty >= 10.0) {
+    finalLabel = `Clash Vibe (${t1.vibe}↔${t2.vibe})`;
+    finalBadge = "danger";
+  }
 
   return {
     cost,
     camScore01: cam.score01,
-    camLabel: cam.label,
-    badgeClass: cam.badgeClass,
+    camLabel: finalLabel,
+    badgeClass: finalBadge,
     bpmDiff: +bpmDiff.toFixed(1),
     spectralCohesionPct: Math.round(spectralCohesion * 100),
     overallCompatPct
@@ -637,8 +762,8 @@ function setOptimizerProgress(stepNum, pct, telemetryText, titleText = null) {
 }
 
 /**
- * Ordina i brani usando Multi-Start Greedy Nearest Neighbor + 2-Opt Local Search
- * con matrice costi pre-calcolata O(1) e aggiornamenti asincroni non-bloccanti.
+ * Ordina i brani usando Harmonic Cluster Flow (Macro Wheel Ring) + Multi-Start Greedy con Lookahead
+ * + 2-Opt Local Search con penalità proibitive per eliminare salti e scontri di stile.
  */
 async function sequenceDjSetOptimalAsync(tracks, curveMode = "crescendo", fixedOpenerId = "auto", onProgress = null) {
   const n = tracks.length;
@@ -649,7 +774,7 @@ async function sequenceDjSetOptimalAsync(tracks, curveMode = "crescendo", fixedO
   const maxE = Math.max(...energies);
   const curveWeight = curveMode === "harmonic" ? 0.15 : 0.45;
 
-  // Pre-calcola matrice N x N dei costi base di coppia (Camelot + BPM + Coesione Timbrica)
+  // Pre-calcola matrice N x N dei costi base di coppia (Camelot + Vibe + BPM + Coesione Timbrica)
   const basePairCost = Array.from({ length: n }, () => new Float32Array(n));
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
@@ -681,11 +806,73 @@ async function sequenceDjSetOptimalAsync(tracks, curveMode = "crescendo", fixedO
     return total;
   }
 
-  // Scelta dei candidati Opener
+  // ─── Generazione Candidati Strategici ───────────────────────────────────────
+  const candidateSequences = [];
+
+  // Strategia 1: Harmonic Cluster Ring Backbone (Garantisce 0 salti dissonanti)
+  function buildHarmonicRingSequence(startKey = null, lockOpenerIdx = -1) {
+    const byKey = new Map();
+    for (let i = 0; i < n; i++) {
+      const k = tracks[i].camelot || "?";
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k).push(i);
+    }
+
+    const wheelOrder = [];
+    for (let h = 1; h <= 12; h++) {
+      wheelOrder.push(`${h}A`, `${h}B`);
+    }
+
+    const presentKeys = wheelOrder.filter(k => byKey.has(k));
+    if (byKey.has("?")) presentKeys.push("?");
+    if (presentKeys.length === 0) return Array.from({ length: n }, (_, i) => i);
+
+    let orderedKeys = presentKeys.slice();
+    if (startKey && presentKeys.includes(startKey)) {
+      const sIdx = presentKeys.indexOf(startKey);
+      orderedKeys = [...presentKeys.slice(sIdx), ...presentKeys.slice(0, sIdx)];
+    }
+
+    const ringSeq = [];
+    orderedKeys.forEach(k => {
+      let group = byKey.get(k).slice();
+      // Ordina per Vibe Spectrum (Funky -> Latin -> Tech -> UKG -> Deep -> Dark) e per energia
+      group.sort((a, b) => {
+        const vA = VIBE_SPECTRUM_ORDER[tracks[a].vibe] || 3;
+        const vB = VIBE_SPECTRUM_ORDER[tracks[b].vibe] || 3;
+        if (vA !== vB) return vA - vB;
+        return (energies[a] || 6.5) - (energies[b] || 6.5);
+      });
+
+      // Se c'è un opener fissato che appartiene a questo gruppo, mettilo in cima al primo cluster
+      if (lockOpenerIdx !== -1 && group.includes(lockOpenerIdx)) {
+        group = [lockOpenerIdx, ...group.filter(x => x !== lockOpenerIdx)];
+      }
+
+      // Serpentine boundary alignment: se invertire il gruppo migliora la giunzione con la fine del gruppo precedente
+      if (ringSeq.length > 0 && !(lockOpenerIdx !== -1 && ringSeq.length === 0)) {
+        const lastIdx = ringSeq[ringSeq.length - 1];
+        const costNormal = basePairCost[lastIdx][group[0]];
+        const costRev = basePairCost[lastIdx][group[group.length - 1]];
+        if (costRev < costNormal && (!group.includes(lockOpenerIdx))) {
+          group.reverse();
+        }
+      }
+      ringSeq.push(...group);
+    });
+
+    return ringSeq;
+  }
+
+  // Scelta Opener
   let openerIndices = [];
+  let isOpenerLocked = false;
   if (fixedOpenerId && fixedOpenerId !== "auto") {
     const idx = tracks.findIndex(t => String(t.id) === String(fixedOpenerId));
-    if (idx !== -1) openerIndices = [idx];
+    if (idx !== -1) {
+      openerIndices = [idx];
+      isOpenerLocked = true;
+    }
   }
 
   if (openerIndices.length === 0) {
@@ -697,26 +884,34 @@ async function sequenceDjSetOptimalAsync(tracks, curveMode = "crescendo", fixedO
       }))
       .sort((a, b) => a.startCost - b.startCost);
 
-    openerIndices = rankedStarts.slice(0, Math.min(6, n)).map(x => x.idx);
+    openerIndices = rankedStarts.slice(0, Math.min(4, n)).map(x => x.idx);
   }
 
-  let bestIdxSeq = null;
-  let bestCost = Infinity;
+  // Aggiungi sequenze Harmonic Ring per ciascun candidato Opener
+  for (const oIdx of openerIndices) {
+    const oKey = tracks[oIdx].camelot;
+    const ringCand = buildHarmonicRingSequence(oKey, isOpenerLocked ? oIdx : -1);
+    candidateSequences.push(ringCand);
+  }
 
-  for (let oPos = 0; oPos < openerIndices.length; oPos++) {
-    const startIdx = openerIndices[oPos];
+  // Strategia 2: Greedy con Cluster Retention
+  for (const startIdx of openerIndices) {
     const used = new Uint8Array(n);
     const idxSeq = [startIdx];
     used[startIdx] = 1;
 
     for (let step = 1; step < n; step++) {
       const prevIdx = idxSeq[idxSeq.length - 1];
+      const prevTrack = tracks[prevIdx];
       let bestNextIdx = -1;
       let bestStepCost = Infinity;
 
       for (let j = 0; j < n; j++) {
         if (used[j]) continue;
-        const sc = stepTransitionCost(prevIdx, j, step);
+        const candTrack = tracks[j];
+        // Bonus per completare il cluster di chiave prima di saltare alla successiva
+        const clusterBonus = (prevTrack.camelot === candTrack.camelot) ? -0.8 : 0.0;
+        const sc = stepTransitionCost(prevIdx, j, step) + clusterBonus;
         if (sc < bestStepCost) {
           bestStepCost = sc;
           bestNextIdx = j;
@@ -728,61 +923,74 @@ async function sequenceDjSetOptimalAsync(tracks, curveMode = "crescendo", fixedO
         idxSeq.push(bestNextIdx);
       }
     }
+    candidateSequences.push(idxSeq);
+  }
 
-    // 2-Opt Local Search Refinement
-    const lockFirst = fixedOpenerId && fixedOpenerId !== "auto";
-    const startSwapIdx = lockFirst ? 1 : 0;
-    let improved = true;
-    let iter = 0;
-    let currCost = evaluateIdxSequenceCost(idxSeq);
-    const maxIter = n > 120 ? 15 : 35;
+  // Seleziona la sequenza migliore tra i candidati iniziali
+  let bestIdxSeq = null;
+  let bestCost = Infinity;
 
-    while (improved && iter < maxIter) {
-      improved = false;
-      iter++;
-      for (let i = startSwapIdx; i < n - 2; i++) {
-        for (let k = i + 1; k < n; k++) {
-          // Inverti in-place il segmento [i..k]
-          let l = i, r = k;
+  for (let c = 0; c < candidateSequences.length; c++) {
+    const seq = candidateSequences[c];
+    if (!seq || seq.length !== n) continue;
+    const cost = evaluateIdxSequenceCost(seq);
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestIdxSeq = seq.slice();
+    }
+  }
+
+  if (!bestIdxSeq) {
+    bestIdxSeq = Array.from({ length: n }, (_, i) => i);
+  }
+
+  // ─── 2-Opt Local Search Refinement ──────────────────────────────────────────
+  const startSwapIdx = isOpenerLocked ? 1 : 0;
+  let improved = true;
+  let iter = 0;
+  let currCost = bestCost;
+  const maxIter = n > 120 ? 15 : 35;
+
+  while (improved && iter < maxIter) {
+    improved = false;
+    iter++;
+    for (let i = startSwapIdx; i < n - 2; i++) {
+      for (let k = i + 1; k < n; k++) {
+        // Inverti in-place il segmento [i..k]
+        let l = i, r = k;
+        while (l < r) {
+          const tmp = bestIdxSeq[l];
+          bestIdxSeq[l] = bestIdxSeq[r];
+          bestIdxSeq[r] = tmp;
+          l++;
+          r--;
+        }
+        const candCost = evaluateIdxSequenceCost(bestIdxSeq);
+        if (candCost + 1e-4 < currCost) {
+          currCost = candCost;
+          improved = true;
+        } else {
+          // Ripristina in caso di costo peggiore o proibitivo
+          l = i;
+          r = k;
           while (l < r) {
-            const tmp = idxSeq[l];
-            idxSeq[l] = idxSeq[r];
-            idxSeq[r] = tmp;
+            const tmp = bestIdxSeq[l];
+            bestIdxSeq[l] = bestIdxSeq[r];
+            bestIdxSeq[r] = tmp;
             l++;
             r--;
-          }
-          const candCost = evaluateIdxSequenceCost(idxSeq);
-          if (candCost + 1e-4 < currCost) {
-            currCost = candCost;
-            improved = true;
-          } else {
-            // Ripristina
-            l = i;
-            r = k;
-            while (l < r) {
-              const tmp = idxSeq[l];
-              idxSeq[l] = idxSeq[r];
-              idxSeq[r] = tmp;
-              l++;
-              r--;
-            }
           }
         }
       }
     }
 
-    if (currCost < bestCost) {
-      bestCost = currCost;
-      bestIdxSeq = idxSeq.slice();
-    }
-
     if (onProgress) {
-      const subPct = Math.round(((oPos + 1) / openerIndices.length) * 100);
-      await onProgress(oPos + 1, openerIndices.length, iter, subPct);
+      const subPct = Math.round((iter / maxIter) * 100);
+      await onProgress(1, 1, iter, subPct);
     }
   }
 
-  return bestIdxSeq ? bestIdxSeq.map(i => tracks[i]) : tracks.slice();
+  return bestIdxSeq.map(i => tracks[i]);
 }
 
 function computeSetSummaryMetrics(tracks, curveMode = "crescendo") {
@@ -1005,13 +1213,27 @@ function parseM3uPlaylist(text, fileName) {
         }
       }
 
+      // Estrai Camelot dal nome file se presente (es. [11A], _6A_, 11A)
+      let detectedCamelot = "8A";
+      const camMatch = stem.match(/[\s\[\(_-](1[0-2]|[1-9])[AB][\s\]\)_.-]/i) || stem.match(/\b(1[0-2]|[1-9])[AB]\b/i);
+      if (camMatch) {
+        detectedCamelot = normalizeCamelot(camMatch[0]);
+      }
+
+      // Estrai BPM se presente nel filename (es. 126bpm)
+      let detectedBpm = 126;
+      const bpmMatch = stem.match(/\b(1[1-3][0-9](?:\.[0-9]+)?)\s*(?:bpm)?\b/i);
+      if (bpmMatch && parseFloat(bpmMatch[1]) >= 115 && parseFloat(bpmMatch[1]) <= 140) {
+        detectedBpm = parseFloat(bpmMatch[1]);
+      }
+
       state.tracksById.set(id, {
         id,
         title: pendingTitle || stem,
         artist: pendingArtist || "Artista",
-        bpm: 126,
-        rawKey: "",
-        camelot: "8A",
+        bpm: +detectedBpm.toFixed(2),
+        rawKey: CAMELOT_TO_KEY_NAME[detectedCamelot] || "",
+        camelot: detectedCamelot,
         duration: pendingDuration,
         genre: plName,
         label: "",
@@ -1109,11 +1331,10 @@ function selectPlaylist(playlistId) {
 
   state.activePlaylistId = pl.id;
   state.isOptimized = false;
-  state.rejectedTracks = [];
 
   const profile = getActiveProfile(pl.name, pl.trackIds.map(id => state.tracksById.get(id)).filter(Boolean));
 
-  state.originalTracks = pl.trackIds
+  const allTracks = pl.trackIds
     .map((id, idx) => {
       const base = state.tracksById.get(String(id));
       if (!base) return null;
@@ -1123,12 +1344,22 @@ function selectPlaylist(playlistId) {
     })
     .filter(Boolean);
 
+  const seps = allTracks.filter(isSeparatorTrack);
+  const playable = allTracks.filter(t => !isSeparatorTrack(t));
+
+  state.rejectedTracks = seps.map(s => ({
+    ...s,
+    rejectReason: `Traccia segnaposto / separatore ignorata (${s.title || 'Separatore Rekordbox'})`
+  }));
+
+  state.originalTracks = playable;
   state.currentTracks = state.originalTracks.map(t => ({ ...t }));
   state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
   state.afterMetrics = null;
 
   activePlaylistPath.textContent = pl.folderPath ? `CARTELLA: ${pl.folderPath}` : "PLAYLIST REKORDBOX";
-  activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani)`;
+  const sepLabel = seps.length > 0 ? ` • 🧹 ${seps.length} separatore escluso` : "";
+  activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${sepLabel})`;
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
   btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
   btnRunDeepDsp.disabled = state.localAudioFiles.size === 0 || state.currentTracks.length === 0;
@@ -1137,8 +1368,13 @@ function selectPlaylist(playlistId) {
   renderPlaylistSidebar();
   updateKpiDisplay();
   renderTracksTable();
+  if (seps.length > 0) {
+    renderRejectedTracks();
+    rejectedBox.hidden = false;
+  } else {
+    rejectedBox.hidden = true;
+  }
   exportBar.hidden = true;
-  rejectedBox.hidden = true;
 }
 
 function populateOpenerSelect(tracks) {
@@ -1242,16 +1478,17 @@ async function runPlaylistOptimizer() {
       }
     );
 
+    const existingSeps = (state.rejectedTracks || []).filter(isSeparatorTrack);
     if (filterMode === "push_bottom" && lowPool.length > 0) {
       const orderedLow = await sequenceDjSetOptimalAsync(lowPool, curveMode, "auto");
       state.currentTracks = [...orderedMain, ...orderedLow];
-      state.rejectedTracks = [];
+      state.rejectedTracks = existingSeps;
     } else if (filterMode === "exclude_low" && lowPool.length > 0) {
       state.currentTracks = orderedMain;
-      state.rejectedTracks = lowPool;
+      state.rejectedTracks = [...existingSeps, ...lowPool];
     } else {
       state.currentTracks = orderedMain;
-      state.rejectedTracks = [];
+      state.rejectedTracks = existingSeps;
     }
 
     // STEP 4: Validazione Transizioni e Riepilogo Finale
@@ -1409,6 +1646,7 @@ function renderTracksTable() {
             <span>${escapeHtml(t.title)}</span>
           </div>
           <div class="track-cell-sub">
+            <span class="vibe-tag ${escapeHtml((t.vibe || 'tech_house').toLowerCase())}">${escapeHtml(VIBE_LABELS[t.vibe] || 'Tech House')}</span>
             ${escapeHtml(t.artist)} ${t.genre ? `• ${escapeHtml(t.genre)}` : ""} • ${formatDuration(t.duration)}
           </div>
         </td>
@@ -1422,7 +1660,7 @@ function renderTracksTable() {
         <td>
           <div class="eq-mini-bars">
             <div class="energy-meter">
-              <strong>E: ${Number(t.energy).toFixed(1)}</strong>
+              <strong>E: ${Number(t.energy).toFixed(1)}${t.explicitEnergyTag ? ` (${t.explicitEnergyTag})` : ''}</strong>
               <div class="energy-bar-bg"><div class="energy-bar-fill" style="width:${energyPct}%"></div></div>
             </div>
             <div class="eq-tags">Sub+Kick: ${subKick}% • Groove: ${groovePct}%</div>
