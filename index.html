@@ -142,11 +142,12 @@
           </div>
 
           <div class="ctrl-field">
-            <label for="filterModeSelect">🧹 Gestione Brani Fuori Profilo</label>
+            <label for="filterModeSelect">🎯 Selettività &amp; Pulizia Playlist (Scarti)</label>
             <select id="filterModeSelect" class="rb-select">
-              <option value="keep_all">Mantieni tutti i brani (Riordina l'intera playlist)</option>
-              <option value="push_bottom">Sposta i meno affini in fondo alla playlist</option>
-              <option value="exclude_low">Escludi brani sotto soglia (Mostra in Scarti)</option>
+              <option value="strict_curation" selected>💎 Ultra-Selettivo (Pulizia Massima — Solo Brani Perfetti)</option>
+              <option value="balanced_filter">⚖️ Selettivo Standard (Scarta Outlier Stilistici, BPM ed Energetici)</option>
+              <option value="push_bottom">🔻 Sposta i brani meno affini in fondo (Bonus Tracks)</option>
+              <option value="keep_all">📦 Conservativo (Mantieni tutti i brani senza scarti)</option>
             </select>
           </div>
         </div>
@@ -277,8 +278,8 @@
       <!-- REJECTED / EXCLUDED TRACKS ACCORDION (IF FILTER MODE EXCLUDES TRACKS) -->
       <details id="rejectedBox" class="rejected-box" hidden>
         <summary>
-          <span>🗑️ Brani Fuori Profilo / Esclusi dal Mix (<span id="rejectedCount">0</span>)</span>
-          <small>Clicca per ispezionare o reinserire nel set</small>
+          <span>🗑️ Brani Scartati per Selettività &amp; Coerenza (<span id="rejectedCount">0</span>)</span>
+          <small>Clicca per ispezionare i motivi dello scarto o reinserire nel set</small>
         </summary>
         <div id="rejectedList" class="rejected-list"></div>
       </details>

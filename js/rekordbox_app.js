@@ -360,26 +360,32 @@ function extractTrackVibe(track) {
       text.includes("nudisco") || text.includes("disco") || text.includes("the bomb") || 
       text.includes("piano groove") || text.includes("soulpainters") || text.includes("jackin") ||
       text.includes("crazibiza") || text.includes("block & crown") || text.includes("hatiras") ||
-      text.includes("djset_funky")) {
+      text.includes("purple disco") || text.includes("djset_funky")) {
     return "FUNKY_DISCO";
   }
-  if (text.includes("latintech") || text.includes("latin") || text.includes("tribal") || 
-      text.includes("bongo") || text.includes("mamasitas") || text.includes("la bamba") || 
-      text.includes("bolgheri") || text.includes("días de fiesta") || text.includes("salsa")) {
+  if (text.includes("tropical") || text.includes("latintech") || text.includes("latin") || 
+      text.includes("tribal") || text.includes("bongo") || text.includes("mamasitas") || 
+      text.includes("la bamba") || text.includes("bolgheri") || text.includes("días de fiesta") || 
+      text.includes("salsa") || text.includes("afro") || text.includes("conga") ||
+      text.includes("pasarla") || text.includes("colombiana") || text.includes("suave") ||
+      text.includes("mueve") || text.includes("vacilón") || text.includes("vacilon") ||
+      text.includes("pamojat") || text.includes("aguella") || text.includes("repicar") ||
+      text.includes("otra vez")) {
     return "LATIN_TRIBAL";
   }
   if (text.includes("tekk") || text.includes("darkwave") || text.includes("acid") || 
       text.includes("industrial") || text.includes("raw") || text.includes("driving") || 
       text.includes("rave") || text.includes("technordh") || text.includes("hypnotic") || 
-      text.includes("underground 69")) {
+      text.includes("underground 69") || text.includes("bart b more")) {
     return "DARK_TEKK";
   }
   if (text.includes("bassline") || text.includes("uk garage") || text.includes("ukg") || 
-      text.includes("speed garage") || text.includes("mirage")) {
+      text.includes("speed garage") || text.includes("junglist") || text.includes("mirage")) {
     return "BASSLINE_UKG";
   }
   if (text.includes("deeptech") || text.includes("deep tech") || text.includes("minimal") || 
-      text.includes("deep water") || text.includes("subtle")) {
+      text.includes("deep water") || text.includes("subtle") || text.includes("relaks") ||
+      text.includes("chill") || text.includes("ambient")) {
     return "DEEP_MINIMAL";
   }
   return "TECH_HOUSE";
@@ -387,7 +393,7 @@ function extractTrackVibe(track) {
 
 const VIBE_LABELS = {
   "FUNKY_DISCO": "Funky / Disco",
-  "LATIN_TRIBAL": "Latin / Tribal",
+  "LATIN_TRIBAL": "Latin / Tribal / Tropical",
   "DARK_TEKK": "Dark / Tekk / Acid",
   "BASSLINE_UKG": "Bassline / UKG",
   "DEEP_MINIMAL": "Deep / Minimal",
@@ -412,20 +418,164 @@ function computeVibeAffinityPenalty(v1, v2) {
   if ((v1 === "FUNKY_DISCO" && v2 === "DARK_TEKK") || (v2 === "FUNKY_DISCO" && v1 === "DARK_TEKK")) {
     return 15.0; // Barriera stilistica
   }
-  // Scontro medio: Funky vs Bassline UKG
+  // Scontro medio-severo: Funky vs Bassline UKG
   if ((v1 === "FUNKY_DISCO" && v2 === "BASSLINE_UKG") || (v2 === "FUNKY_DISCO" && v1 === "BASSLINE_UKG")) {
     return 8.0;
   }
-  // Scontro medio: Latin Tribal vs Dark Tekk
+  // Scontro medio-severo: Latin Tribal vs Dark Tekk
   if ((v1 === "LATIN_TRIBAL" && v2 === "DARK_TEKK") || (v2 === "LATIN_TRIBAL" && v1 === "DARK_TEKK")) {
-    return 7.0;
+    return 8.5;
+  }
+  // Scontro medio: Latin Tribal vs Funky Disco
+  if ((v1 === "LATIN_TRIBAL" && v2 === "FUNKY_DISCO") || (v2 === "LATIN_TRIBAL" && v1 === "FUNKY_DISCO")) {
+    return 7.5;
   }
   // Deep Minimal vs Dark Tekk
   if ((v1 === "DEEP_MINIMAL" && v2 === "DARK_TEKK") || (v2 === "DEEP_MINIMAL" && v1 === "DARK_TEKK")) {
-    return 4.0;
+    return 5.0;
   }
-  // Con Tech House standard fa da ponte neutro perfetto
   return 0.3;
+}
+
+function getDominantVibeOfPlaylist(tracks, playlistName = "") {
+  const plLow = String(playlistName || "").toLowerCase();
+  if (plLow.includes("tropical") || plLow.includes("latin") || plLow.includes("tribal")) return "LATIN_TRIBAL";
+  if (plLow.includes("funky") || plLow.includes("disco") || plLow.includes("nu disco")) return "FUNKY_DISCO";
+  if (plLow.includes("techno") || plLow.includes("tekk") || plLow.includes("acid")) return "DARK_TEKK";
+  if (plLow.includes("bassline") || plLow.includes("garage") || plLow.includes("ukg")) return "BASSLINE_UKG";
+  if (plLow.includes("minimal") || plLow.includes("deep")) return "DEEP_MINIMAL";
+
+  const counts = {};
+  (tracks || []).forEach(t => {
+    const v = t.vibe || extractTrackVibe(t);
+    counts[v] = (counts[v] || 0) + 1;
+  });
+  let best = "TECH_HOUSE";
+  let maxC = 0;
+  for (const [k, c] of Object.entries(counts)) {
+    if (c > maxC) {
+      maxC = c;
+      best = k;
+    }
+  }
+  return best;
+}
+
+function getCamelotNeighbors(c) {
+  if (!c || c === "?") return [];
+  const m = String(c).match(/^(\d{1,2})([AB])$/i);
+  if (!m) return [];
+  const num = parseInt(m[1], 10);
+  const letter = m[2].toUpperCase();
+  const otherLetter = letter === "A" ? "B" : "A";
+  const prev = num === 1 ? 12 : num - 1;
+  const next = num === 12 ? 1 : num + 1;
+  return [
+    `${num}${letter}`,
+    `${prev}${letter}`,
+    `${next}${letter}`,
+    `${num}${otherLetter}`
+  ];
+}
+
+/**
+ * Curatore Selettivo: filtra ed espelle dal pool i brani che non hanno coerenza
+ * stilistica, armonica, energetica o ritmica con l'identità del mix.
+ */
+function curateAndFilterPlaylistOutliers(tracks, profile, filterMode, plName, openerId = "auto") {
+  if (filterMode === "keep_all" || !tracks || tracks.length === 0) {
+    return { mainPool: tracks, lowPool: [] };
+  }
+
+  const isStrict = filterMode === "strict_curation";
+  const dominantVibe = getDominantVibeOfPlaylist(tracks, plName);
+
+  const bpms = tracks.map(t => Number(t.bpm) || 125).sort((a, b) => a - b);
+  const medianBpm = bpms[Math.floor(bpms.length / 2)] || 125;
+  const bpmTolerance = isStrict ? 4.0 : 7.0;
+
+  const energies = tracks.map(t => Number(t.energy) || 6.5).sort((a, b) => a - b);
+  const medianEnergy = energies[Math.floor(energies.length / 2)] || 6.5;
+
+  const allCamelots = new Set(tracks.map(t => t.camelot).filter(c => c && c !== "?"));
+  const mainPool = [];
+  const lowPool = [];
+
+  for (const t of tracks) {
+    if (openerId !== "auto" && String(t.id) === String(openerId)) {
+      mainPool.push(t);
+      continue;
+    }
+
+    const reasons = [];
+
+    // 1. Outlier Stilistico (Vibe Clash contro Vibe dominante)
+    const vibe = t.vibe || extractTrackVibe(t);
+    const penalty = computeVibeAffinityPenalty(vibe, dominantVibe);
+    if (isStrict && penalty >= 7.0) {
+      reasons.push(`Outlier stilistico (${VIBE_LABELS[vibe] || vibe} estraneo al sound ${VIBE_LABELS[dominantVibe] || dominantVibe})`);
+    } else if (!isStrict && penalty >= 12.0) {
+      reasons.push(`Scontro stilistico grave (${VIBE_LABELS[vibe]} vs ${VIBE_LABELS[dominantVibe]})`);
+    }
+
+    // 2. Outlier Energetico
+    const e = Number(t.energy) || 6.5;
+    if (isStrict) {
+      if (medianEnergy >= 6.0 && e <= 4.4) {
+        reasons.push(`Energia E${t.explicitEnergyTag || Math.round(e)} troppo bassa per il set (media E${Math.round(medianEnergy)})`);
+      } else if (medianEnergy <= 6.5 && e >= 8.8) {
+        reasons.push(`Energia E${t.explicitEnergyTag || Math.round(e)} troppo violenta/peak per il set`);
+      }
+    } else {
+      if (Math.abs(e - medianEnergy) >= 3.6) {
+        reasons.push(`Discrepanza energetica anomala (E${t.explicitEnergyTag || Math.round(e)})`);
+      }
+    }
+
+    // 3. Outlier BPM
+    const bpm = Number(t.bpm) || medianBpm;
+    if (Math.abs(bpm - medianBpm) > bpmTolerance) {
+      reasons.push(`BPM ${bpm.toFixed(1)} fuori range armonico (${(medianBpm - bpmTolerance).toFixed(1)}–${(medianBpm + bpmTolerance).toFixed(1)})`);
+    }
+
+    // 4. DNA Fit sotto soglia di selettività
+    const fitMin = isStrict ? 70 : 58;
+    if (t.dnaFitPct < fitMin) {
+      reasons.push(`Affinità DNA acustico insufficiente (${t.dnaFitPct}% < ${fitMin}%)`);
+    }
+
+    // 5. Orfano Armonico Camelot (nessun brano compatibile nel set)
+    if (tracks.length >= 8 && t.camelot && t.camelot !== "?") {
+      const neighbors = getCamelotNeighbors(t.camelot);
+      const hasCompat = neighbors.some(n => allCamelots.has(n));
+      const countSameKey = tracks.filter(o => o.camelot === t.camelot).length;
+      if (!hasCompat && countSameKey <= 1) {
+        reasons.push(`Chiave Camelot ${t.camelot} isolata (costringerebbe a un salto armonico dissonante)`);
+      }
+    }
+
+    if (reasons.length > 0) {
+      t.rejectReason = reasons.join(" • ");
+      lowPool.push(t);
+    } else {
+      mainPool.push(t);
+    }
+  }
+
+  // Salvaguardia: se il filtro svuotasse la playlist (< 6 brani), mantieni almeno i migliori
+  if (mainPool.length < 6 && tracks.length >= 6) {
+    const sortedByFit = [...tracks].sort((a, b) => b.dnaFitPct - a.dnaFitPct);
+    const safeCount = Math.max(6, Math.floor(tracks.length * 0.6));
+    const safeMain = sortedByFit.slice(0, safeCount);
+    const safeMainIds = new Set(safeMain.map(x => x.id));
+    const safeLow = tracks.filter(x => !safeMainIds.has(x.id)).map(x => {
+      x.rejectReason = x.rejectReason || `Affinità DNA inferiore alla selezione (${x.dnaFitPct}%)`;
+      return x;
+    });
+    return { mainPool: safeMain, lowPool: safeLow };
+  }
+
+  return { mainPool, lowPool };
 }
 
 // ─── Profiling & Acoustic DNA Scoring ────────────────────────────────────────
@@ -570,9 +720,25 @@ function scoreTrackAgainstProfile(track, profile) {
     dislikePenalty = 0.25;
   }
 
+  // Penalità per scontro stilistico di genere (es. Funky o Tekk in un profilo Tech House)
+  let vibePenalty = 0;
+  const pKey = (profile && profile.key) || "all";
+  const vibe = track.vibe || extractTrackVibe(track);
+  if (pKey === "tech_house") {
+    if (vibe === "FUNKY_DISCO") vibePenalty = 0.22;
+    else if (vibe === "DARK_TEKK") vibePenalty = 0.18;
+    else if (vibe === "BASSLINE_UKG") vibePenalty = 0.14;
+  } else if (pKey === "funky_house" || pKey === "nu_disco") {
+    if (vibe === "DARK_TEKK") vibePenalty = 0.26;
+    else if (vibe === "LATIN_TRIBAL") vibePenalty = 0.16;
+  } else if (pKey === "techno") {
+    if (vibe === "FUNKY_DISCO") vibePenalty = 0.28;
+    else if (vibe === "LATIN_TRIBAL") vibePenalty = 0.18;
+  }
+
   const rawAffinity01 = Math.max(
     0.15,
-    Math.min(0.99, bpmScore * 0.30 + camScore * 0.25 + eqScore * 0.45 + artistBonus - dislikePenalty)
+    Math.min(0.99, bpmScore * 0.30 + camScore * 0.25 + eqScore * 0.45 + artistBonus - dislikePenalty - vibePenalty)
   );
 
   track.dnaFitPct = Math.round(rawAffinity01 * 100);
@@ -1584,28 +1750,20 @@ async function runPlaylistOptimizer() {
       curveMode
     );
 
-    let mainPool = scoredPool;
-    let lowPool = [];
-
-    if (filterMode === "exclude_low" || filterMode === "push_bottom") {
-      for (const t of scoredPool) {
-        if (t.dnaFitPct < 60 && String(t.id) !== String(openerId)) {
-          lowPool.push(t);
-        }
-      }
-      if (lowPool.length > 0 && lowPool.length < scoredPool.length - 1) {
-        const lowIds = new Set(lowPool.map(x => x.id));
-        mainPool = scoredPool.filter(x => !lowIds.has(x.id));
-      } else {
-        lowPool = [];
-      }
-    }
+    // Filtraggio e Scarto Outlier Intelligente Multi-Fattore
+    const { mainPool, lowPool } = curateAndFilterPlaylistOutliers(
+      scoredPool,
+      profile,
+      filterMode,
+      plName,
+      openerId
+    );
 
     // STEP 3: Sequenziamento Multi-Start + 2-Opt Local Search
     setOptimizerProgress(
       3,
       55,
-      `Avvio ottimizzatore 2-Opt su ${mainPool.length} brani (Curva: ${curveMode})...`
+      `Avvio ottimizzatore 2-Opt su ${mainPool.length} brani selezionati (Curva: ${curveMode})...`
     );
     await yieldToBrowser(45);
 
@@ -1624,19 +1782,42 @@ async function runPlaylistOptimizer() {
       }
     );
 
+    // Post-Sequencing Quality Pruning (solo in strict_curation):
+    // Rimuove brani rimasti con salti Camelot critici (> 2 ore) o incompatibilità grave (< 48%)
+    let finalAccepted = orderedMain;
+    const postPruned = [];
+    if (filterMode === "strict_curation" && orderedMain.length > 8) {
+      const kept = [orderedMain[0]];
+      for (let i = 1; i < orderedMain.length; i++) {
+        const prev = kept[kept.length - 1];
+        const curr = orderedMain[i];
+        const tr = evaluateTrackTransition(prev, curr);
+        const camJump = evaluateCamelotTransition(prev.camelot, curr.camelot).hourDiff;
+        if (camJump > 2 || tr.overallCompatPct < 48) {
+          curr.rejectReason = `Transizione critica (${tr.camLabel}, compatibilità ${tr.overallCompatPct}% < 48% con brano precedente)`;
+          postPruned.push(curr);
+        } else {
+          kept.push(curr);
+        }
+      }
+      finalAccepted = kept;
+    }
+
     const existingExcluded = (state.rejectedTracks || []).filter(t => 
       isSeparatorTrack(t) || (t.rejectReason && t.rejectReason.includes("duplicata"))
     );
+
     if (filterMode === "push_bottom" && lowPool.length > 0) {
       const orderedLow = await sequenceDjSetOptimalAsync(lowPool, curveMode, "auto");
-      state.currentTracks = [...orderedMain, ...orderedLow];
+      state.currentTracks = [...finalAccepted, ...orderedLow];
+      state.rejectedTracks = [...existingExcluded, ...postPruned];
+    } else if (filterMode === "keep_all") {
+      state.currentTracks = finalAccepted;
       state.rejectedTracks = existingExcluded;
-    } else if (filterMode === "exclude_low" && lowPool.length > 0) {
-      state.currentTracks = orderedMain;
-      state.rejectedTracks = [...existingExcluded, ...lowPool];
     } else {
-      state.currentTracks = orderedMain;
-      state.rejectedTracks = existingExcluded;
+      // strict_curation e balanced_filter
+      state.currentTracks = finalAccepted;
+      state.rejectedTracks = [...existingExcluded, ...lowPool, ...postPruned];
     }
 
     // STEP 4: Validazione Transizioni e Riepilogo Finale
@@ -1650,26 +1831,31 @@ async function runPlaylistOptimizer() {
     setOptimizerProgress(
       5, // Tutti i 4 step completati con ✅
       100,
-      ` Completato! ${movedTracksCount} brani riordinati • Fluidità Camelot: ${state.afterMetrics.harmonicFlowPct}% (${sign})`,
+      `Completato! ${state.currentTracks.length} brani nel set • ${state.rejectedTracks.length} scartati per coerenza`,
       "✅ Mix Perfetto Generato!"
     );
     await yieldToBrowser(260);
 
     updateKpiDisplay();
     renderTracksTable();
-  updateLinkedAudioBadge();
+    updateLinkedAudioBadge();
     renderRejectedTracks();
+
+    if (state.rejectedTracks.length > 0 && rejectedBox) {
+      rejectedBox.hidden = false;
+      rejectedBox.open = true;
+    }
 
     const exportBadgeSummary = document.getElementById("exportBadgeSummary");
     if (exportBadgeSummary) {
-      exportBadgeSummary.textContent = `✅ Mix Ottimizzato (${movedTracksCount} brani riordinati • Camelot ${state.afterMetrics.harmonicFlowPct}%)`;
+      exportBadgeSummary.textContent = `✅ Mix Ottimizzato (${state.currentTracks.length} brani nel set • ${state.rejectedTracks.length} scarti • Camelot ${state.afterMetrics.harmonicFlowPct}%)`;
     }
     exportBar.hidden = false;
     exportBar.classList.remove("flash-highlight");
     void exportBar.offsetWidth;
     exportBar.classList.add("flash-highlight");
 
-    showToast(`⚡ Mix Perfetto pronto! ${movedTracksCount} brani riordinati • Fluidità Camelot: ${state.afterMetrics.harmonicFlowPct}% (${sign})`, 4200);
+    showToast(`⚡ Mix Perfetto pronto! ${state.currentTracks.length} brani nel set • ${state.rejectedTracks.length} scartati per coerenza stilistica!`, 4800);
   } finally {
     if (overlay) overlay.hidden = true;
     btnRunAnalyzer.disabled = false;
@@ -1902,12 +2088,12 @@ function renderRejectedTracks() {
       <div class="rejected-item">
         <div>
           <strong>${escapeHtml(t.artist)} - ${escapeHtml(t.title)}</strong>
-          <span style="color: var(--text-muted); margin-left: 8px;">${t.camelot} • ${t.bpm} BPM • DNA Fit: ${t.dnaFitPct}%</span>
-          <div style="font-size: 0.76rem; color: #f87171; margin-top: 3px;">
-            ⚠️ Motivo: ${escapeHtml(t.rejectReason || 'Escluso dal filtro')}
+          <span style="color: var(--text-muted); margin-left: 8px;">${escapeHtml(t.camelot || '?')} • ${Number(t.bpm || 0).toFixed(1)} BPM • DNA Fit: ${t.dnaFitPct ?? '--'}%</span>
+          <div class="reject-reason-tag">
+            ⚠️ ${escapeHtml(t.rejectReason || 'Escluso per garantire coerenza stilistica e armonica al mix')}
           </div>
         </div>
-        <button type="button" class="rb-btn ghost sm btn-restore-track" data-idx="${idx}">➕ Reinserisci nel Mix</button>
+        <button type="button" class="rb-btn ghost sm btn-restore-track" data-idx="${idx}" title="Forza il reinserimento di questo brano nel mix">➕ Reinserisci nel Mix</button>
       </div>
     `)
     .join("");
