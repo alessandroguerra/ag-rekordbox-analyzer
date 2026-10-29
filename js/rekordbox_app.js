@@ -80,6 +80,7 @@ const state = {
 // ─── DOM References ──────────────────────────────────────────────────────────
 const xmlFileInput = document.getElementById("xmlFileInput");
 const audioFolderInput = document.getElementById("audioFolderInput");
+const audioFilesInput = document.getElementById("audioFilesInput");
 const btnLoadLocalRb = document.getElementById("btnLoadLocalRb");
 const btnLoadDemo = document.getElementById("btnLoadDemo");
 const dropZone = document.getElementById("dropZone");
@@ -1478,7 +1479,26 @@ function selectPlaylist(playlistId) {
   state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
   state.afterMetrics = null;
 
-  activePlaylistPath.textContent = pl.folderPath ? `CARTELLA: ${pl.folderPath}` : "PLAYLIST REKORDBOX";
+  // Calcola cartelle uniche dei file della playlist per informare con precisione l'utente
+  const folderCounts = new Map();
+  playable.forEach(t => {
+    if (t.localPath) {
+      const parts = t.localPath.split(/[\\/]/);
+      parts.pop();
+      const dirName = parts.pop() || "Cartella Base";
+      folderCounts.set(dirName, (folderCounts.get(dirName) || 0) + 1);
+    }
+  });
+  if (folderCounts.size > 1) {
+    const folderListStr = Array.from(folderCounts.entries()).map(([k, v]) => `${k} (${v})`).join(", ");
+    activePlaylistPath.textContent = `📁 File distribuiti in ${folderCounts.size} cartelle: ${folderListStr}`;
+  } else if (folderCounts.size === 1) {
+    const singleFolder = Array.from(folderCounts.keys())[0];
+    activePlaylistPath.textContent = `📁 Cartella audio: ${singleFolder}`;
+  } else {
+    activePlaylistPath.textContent = pl.folderPath ? `CARTELLA: ${pl.folderPath}` : "PLAYLIST REKORDBOX";
+  }
+
   const badges = [];
   if (seps.length > 0) badges.push(`🧹 ${seps.length} separatore escluso`);
   if (duplicates.length > 0) badges.push(`✂️ ${duplicates.length} duplicati rimossi`);
@@ -2506,7 +2526,20 @@ audioFolderInput.addEventListener("change", (e) => {
   }
 });
 
-// Drag & Drop support on top bar
+if (audioFilesInput) {
+  audioFilesInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      indexLocalAudioFiles(e.target.files);
+      if (state.pendingPlayTrackIndex !== null && state.pendingPlayTrackIndex !== undefined) {
+        const idx = state.pendingPlayTrackIndex;
+        state.pendingPlayTrackIndex = null;
+        playTrackAtIndex(idx, true);
+      }
+    }
+  });
+}
+
+// Drag & Drop support on top bar (supporta XML, M3U8 e FILE AUDIO DIRETTI)
 ["dragenter", "dragover"].forEach(ev => {
   dropZone.addEventListener(ev, (e) => {
     e.preventDefault();
@@ -2521,6 +2554,9 @@ audioFolderInput.addEventListener("change", (e) => {
 });
 dropZone.addEventListener("drop", async (e) => {
   const files = Array.from(e.dataTransfer?.files || []);
+  const audioFiles = [];
+  const audioExt = /\.(mp3|wav|aiff|aif|flac|m4a|ogg)$/i;
+
   for (const f of files) {
     if (f.name.toLowerCase().endsWith(".xml")) {
       const text = await f.text();
@@ -2528,7 +2564,14 @@ dropZone.addEventListener("drop", async (e) => {
     } else if (/\.(m3u8|m3u|txt)$/i.test(f.name)) {
       const text = await f.text();
       parseM3uPlaylist(text, f.name);
+    } else if (audioExt.test(f.name)) {
+      audioFiles.push(f);
     }
+  }
+
+  if (audioFiles.length > 0) {
+    indexLocalAudioFiles(audioFiles);
+    showToast(`🎯 Trascinati ${audioFiles.length} file audio mirati per la playlist!`);
   }
 });
 

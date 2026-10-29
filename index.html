@@ -38,9 +38,14 @@
         <input id="xmlFileInput" type="file" accept=".xml,.m3u,.m3u8,.txt" multiple hidden>
       </label>
 
-      <label class="rb-btn secondary file-label" for="audioFolderInput" title="Opzionale: seleziona la cartella dove risiedono i file audio su questo PC per attivare l'analisi spettrale Web Audio DSP e il preascolto">
-        <span>🎧 Collega Cartella Audio PC <small>(DSP Reale + Preview)</small></span>
+      <label class="rb-btn secondary file-label" for="audioFolderInput" title="Opzionale: seleziona una cartella dove risiedono i file audio su questo PC per attivare l'analisi spettrale Web Audio DSP e il preascolto">
+        <span>📁 Collega Cartella Audio PC</span>
         <input id="audioFolderInput" type="file" webkitdirectory directory multiple hidden>
+      </label>
+
+      <label class="rb-btn ghost file-label" for="audioFilesInput" title="Più veloce e mirato: seleziona solo i file MP3 specifici della playlist (nessun file inutile caricato)">
+        <span>🎯 Seleziona Solo MP3 Playlist</span>
+        <input id="audioFilesInput" type="file" accept="audio/*,.mp3,.wav,.aiff,.flac,.m4a" multiple hidden>
       </label>
 
       <button id="btnLoadLocalRb" class="rb-btn accent" type="button" hidden title="Legge direttamente dal server Python locale se attivo su questo Mac/PC">
@@ -53,7 +58,7 @@
     </div>
 
     <div class="import-status">
-      <span id="loadedSourceInfo">Trascina qui il tuo file <code>rekordbox.xml</code> (da Rekordbox: <em>File → Esporta collezione in formato xml</em>) o una playlist <code>.m3u8</code></span>
+      <span id="loadedSourceInfo">Trascina qui il tuo file <code>rekordbox.xml</code>, playlist <code>.m3u8</code> o <strong>trascina direttamente i soli file MP3 della playlist</strong></span>
       <span id="linkedAudioBadge" class="audio-linked-pill" hidden>0 file audio collegati</span>
     </div>
   </section>
