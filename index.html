@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#080b12">
   <title>AlexGherra — Rekordbox DJ Set Analyzer &amp; Mix Optimizer</title>
-  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_165159">
+  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_165906">
 </head>
 <body class="ag-pin-locked">
 
@@ -17,7 +17,7 @@
       <div>
         <h1 class="rb-title">AG Rekordbox Mix Optimizer</h1>
         <div class="rb-updated-tag">
-          Ultima modifica: <strong id="appLastUpdated">29/10/2026 16:51</strong>
+          Ultima modifica: <strong id="appLastUpdated">29/10/2026 16:59</strong>
         </div>
         <p class="rb-subtitle">DJSet_Analyzer • DNA Acustico 46-dim • Ruota di Camelot • Sequencer 2-Opt</p>
       </div>
@@ -337,40 +337,68 @@
         <audio id="previewAudioEl" preload="metadata"></audio>
       </div>
 
-      <!-- RESPONSIVE TRACKLIST TABLE -->
-      <div tabindex="0" role="region" aria-labelledby="playlist-table-caption" class="table-wrapper">
-        <table id="tracksTable" class="rb-table">
-          <caption id="playlist-table-caption" class="sr-only">Elenco brani della playlist Rekordbox e ordine ottimizzato per il DJ set</caption>
-          <thead>
-            <tr>
-              <th scope="col" class="col-pos">#</th>
-              <th scope="col" class="col-track">Brano &amp; Artista</th>
-              <th scope="col" class="col-camelot">Camelot / Key</th>
-              <th scope="col" class="col-bpm">BPM</th>
-              <th scope="col" class="col-energy">Energia &amp; Club EQ</th>
-              <th scope="col" class="col-dna">DNA Fit</th>
-              <th scope="col" class="col-trans">Transizione → Successivo</th>
-              <th scope="col" class="col-actions">Azioni</th>
-            </tr>
-          </thead>
-          <tbody id="tracksTableBody">
-            <tr>
-              <td colspan="8" class="empty-table-cell">
-                Seleziona una playlist dalla barra laterale per visualizzare e ottimizzare i brani.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- SPLIT VIEW: SELEZIONATI (SX) E SCARTATI (DX) AFFIANCATI -->
+      <div class="tracks-split-container" id="tracksSplitContainer">
+        <!-- COLONNA SINISTRA: PLAYLIST OTTIMIZZATA (SELEZIONATI) -->
+        <div class="tracks-col col-selected">
+          <div class="col-header-bar">
+            <div class="col-header-left">
+              <span class="col-dot dot-selected"></span>
+              <h3 class="col-title">🎧 Playlist Ottimizzata (<span id="selectedCountBadge">0 brani</span>)</h3>
+            </div>
+            <div class="col-header-right">
+              <span class="col-subtitle-tag">Camelot 2-Opt</span>
+            </div>
+          </div>
 
-      <!-- REJECTED / EXCLUDED TRACKS ACCORDION (IF FILTER MODE EXCLUDES TRACKS) -->
-      <details id="rejectedBox" class="rejected-box" hidden>
-        <summary>
-          <span>🗑️ Brani Scartati per Selettività &amp; Coerenza (<span id="rejectedCount">0</span>)</span>
-          <small>Clicca per ispezionare i motivi dello scarto o reinserire nel set</small>
-        </summary>
-        <div id="rejectedList" class="rejected-list"></div>
-      </details>
+          <div tabindex="0" role="region" aria-labelledby="playlist-table-caption" class="table-wrapper">
+            <table id="tracksTable" class="rb-table">
+              <caption id="playlist-table-caption" class="sr-only">Elenco brani della playlist Rekordbox e ordine ottimizzato per il DJ set</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="col-pos">#</th>
+                  <th scope="col" class="col-track">Brano &amp; Artista</th>
+                  <th scope="col" class="col-camelot">Camelot / Key</th>
+                  <th scope="col" class="col-bpm">BPM</th>
+                  <th scope="col" class="col-energy">Energia &amp; Club EQ</th>
+                  <th scope="col" class="col-dna">DNA Fit</th>
+                  <th scope="col" class="col-trans">Transizione → Successivo</th>
+                  <th scope="col" class="col-actions">Azioni</th>
+                </tr>
+              </thead>
+              <tbody id="tracksTableBody">
+                <tr>
+                  <td colspan="8" class="empty-table-cell">
+                    Seleziona una playlist dalla barra laterale per visualizzare e ottimizzare i brani.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- COLONNA DESTRA: BRANI SCARTATI & ESCLUSI -->
+        <div class="tracks-col col-rejected" id="rejectedBox">
+          <div class="col-header-bar rejected-header-bar">
+            <div class="col-header-left">
+              <span class="col-dot dot-rejected"></span>
+              <h3 class="col-title">🗑️ Brani Scartati (<span id="rejectedCount">0</span>)</h3>
+            </div>
+            <div class="col-header-right">
+              <button type="button" id="btnToggleRejectedCol" class="rb-btn ghost xs" title="Riduci o espandi la colonna degli scarti">⇥ Riduci</button>
+            </div>
+          </div>
+
+          <div class="rejected-scroll-wrapper">
+            <div id="rejectedEmptyMsg" class="rejected-empty-state">
+              <div class="empty-icon">✨</div>
+              <strong>Nessun brano scartato</strong>
+              <p>Tutti i brani della playlist soddisfano i requisiti di BPM, DNA Fit (&ge; 80%) e armonia.</p>
+            </div>
+            <div id="rejectedList" class="rejected-list"></div>
+          </div>
+        </div>
+      </div>
 
     </section>
   </main>
@@ -455,9 +483,9 @@
   <!-- TOAST NOTIFICATION -->
   <div id="rbToast" class="rb-toast" role="status" aria-live="polite"></div>
 
-  <script src="./js/profiles_data.js?v=20261029_165159"></script>
-  <script src="./js/ag_pin_guard.js?v=20261029_165159"></script>
-  <script src="./js/rekordbox_app.js?v=20261029_165159"></script>
+  <script src="./js/profiles_data.js?v=20261029_165906"></script>
+  <script src="./js/ag_pin_guard.js?v=20261029_165906"></script>
+  <script src="./js/rekordbox_app.js?v=20261029_165906"></script>
 </body>
 </html>
 

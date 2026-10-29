@@ -1416,52 +1416,275 @@ tr.playing-row .pos-num {
   }
 }
 
-/* ─── REJECTED BOX ───────────────────────────────────────────────────────── */
-.rejected-box {
-  background: var(--bg-card);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
+/* ─── SPLIT VIEW: SELEZIONATI (SX) E SCARTATI (DX) AFFIANCATI ─────────────── */
+.tracks-split-container {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  transition: grid-template-columns 0.25s ease;
 }
 
-.rejected-box summary {
+.tracks-split-container.rejected-collapsed {
+  grid-template-columns: minmax(0, 1fr) 48px;
+}
+
+@media (max-width: 1100px) {
+  .tracks-split-container {
+    grid-template-columns: 1fr;
+  }
+  .tracks-split-container.rejected-collapsed {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tracks-col {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.col-selected {
+  border-top: 3px solid var(--accent-cyan);
+}
+
+.col-rejected {
+  border-top: 3px solid rgba(239, 68, 68, 0.75);
+  background: rgba(18, 16, 26, 0.85);
+  transition: all 0.25s ease;
+}
+
+.tracks-split-container.rejected-collapsed .col-rejected {
+  width: 48px;
+  min-width: 48px;
+  overflow: hidden;
+}
+
+.tracks-split-container.rejected-collapsed .col-rejected .col-title,
+.tracks-split-container.rejected-collapsed .col-rejected .rejected-scroll-wrapper {
+  display: none;
+}
+
+.col-header-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 0.86rem;
-  color: #fca5a5;
+  padding: 11px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 
-.rejected-list {
-  margin-top: 10px;
+.rejected-header-bar {
+  background: rgba(239, 68, 68, 0.06);
+  border-bottom-color: rgba(239, 68, 68, 0.2);
+}
+
+.col-header-left {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-selected {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0, 210, 190, 0.6);
+}
+
+.dot-rejected {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.col-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
-.rejected-item {
+.col-subtitle-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 210, 190, 0.12);
+  color: var(--accent-cyan);
+}
+
+.rejected-header-bar .count-pill.danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+/* In the split view, table wrapper doesn't need outer border since .tracks-col has it */
+.col-selected .table-wrapper {
+  border: none;
+  border-radius: 0;
+  max-block-size: min(680px, 76vh);
+}
+
+.rejected-scroll-wrapper {
+  padding: 12px;
+  overflow-y: auto;
+  max-height: min(680px, 76vh);
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rejected-empty-state {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-muted);
+}
+
+.rejected-empty-state .empty-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.rejected-empty-state strong {
+  color: var(--text-main);
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+}
+
+.rejected-empty-state p {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  max-width: 260px;
+  margin: 0;
+}
+
+/* Rejected Track Cards */
+.rejected-card {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
-  font-size: 0.8rem;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  transition: all 0.15s ease;
+}
+
+.rejected-card:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.38);
+}
+
+.rejected-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rejected-card-header {
+  display: flex;
+  flex-direction: column;
+}
+
+.rejected-card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rejected-card-artist {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rejected-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.camelot-pill-sm {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent-cyan);
+}
+
+.bpm-pill-sm {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.dna-pill-sm {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.dna-pill-sm.dna-low {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.dna-pill-sm.dna-ok {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
 }
 
 .reject-reason-tag {
-  font-size: 0.74rem;
-  color: #f87171;
+  font-size: 0.72rem;
+  color: #fca5a5;
   background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.28);
   border-radius: 4px;
   padding: 2px 6px;
   margin-top: 4px;
-  display: inline-block;
   font-weight: 600;
+  line-height: 1.25;
+}
+
+.rejected-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  flex-shrink: 0;
 }
 
 /* ─── MODAL & TOAST ──────────────────────────────────────────────────────── */

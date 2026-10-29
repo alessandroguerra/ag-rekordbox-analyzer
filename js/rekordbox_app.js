@@ -1770,12 +1770,8 @@ function selectPlaylist(playlistId, preserveCustomBpm = false) {
   updateKpiDisplay();
   renderTracksTable();
   updateLinkedAudioBadge();
-  if (state.rejectedTracks.length > 0) {
-    renderRejectedTracks();
-    rejectedBox.hidden = false;
-  } else {
-    rejectedBox.hidden = true;
-  }
+  renderRejectedTracks();
+  if (rejectedBox) rejectedBox.hidden = false;
   exportBar.hidden = true;
 }
 
@@ -1939,10 +1935,7 @@ async function runPlaylistOptimizer() {
     updateLinkedAudioBadge();
     renderRejectedTracks();
 
-    if (state.rejectedTracks.length > 0 && rejectedBox) {
-      rejectedBox.hidden = false;
-      rejectedBox.open = true;
-    }
+    if (rejectedBox) rejectedBox.hidden = false;
 
     const exportBadgeSummary = document.getElementById("exportBadgeSummary");
     if (exportBadgeSummary) {
@@ -2048,6 +2041,11 @@ function findMatchingLocalAudioFile(track) {
 }
 
 function renderTracksTable() {
+  const selectedCountBadge = document.getElementById("selectedCountBadge");
+  if (selectedCountBadge) {
+    selectedCountBadge.textContent = `${state.currentTracks ? state.currentTracks.length : 0} brani`;
+  }
+
   if (!state.currentTracks || state.currentTracks.length === 0) {
     tracksTableBody.innerHTML = `
       <tr>
@@ -2179,27 +2177,55 @@ function moveTrackRow(idx, delta) {
 }
 
 function renderRejectedTracks() {
-  if (!state.rejectedTracks || state.rejectedTracks.length === 0) {
-    rejectedBox.hidden = true;
+  const count = state.rejectedTracks ? state.rejectedTracks.length : 0;
+  if (rejectedCount) rejectedCount.textContent = String(count);
+
+  const emptyMsg = document.getElementById("rejectedEmptyMsg");
+  if (!rejectedList) return;
+
+  if (count === 0) {
+    if (emptyMsg) emptyMsg.hidden = false;
+    rejectedList.innerHTML = "";
     return;
   }
-  rejectedBox.hidden = false;
-  rejectedCount.textContent = String(state.rejectedTracks.length);
 
+  if (emptyMsg) emptyMsg.hidden = true;
   rejectedList.innerHTML = state.rejectedTracks
-    .map((t, idx) => `
-      <div class="rejected-item">
-        <div>
-          <strong>${escapeHtml(t.artist)} - ${escapeHtml(t.title)}</strong>
-          <span style="color: var(--text-muted); margin-left: 8px;">${escapeHtml(t.camelot || '?')} • ${Number(t.bpm || 0).toFixed(1)} BPM • DNA Fit: ${t.dnaFitPct ?? '--'}%</span>
+    .map((t, idx) => {
+      const dnaPct = t.dnaFitPct ?? Math.round((t.score ?? 0.5) * 100);
+      const dnaClass = dnaPct < 80 ? "dna-low" : "dna-ok";
+      return `
+      <div class="rejected-card">
+        <div class="rejected-card-main">
+          <div class="rejected-card-header">
+            <strong class="rejected-card-title">${escapeHtml(t.title)}</strong>
+            <span class="rejected-card-artist">${escapeHtml(t.artist)}</span>
+          </div>
+          <div class="rejected-card-badges">
+            <span class="camelot-pill-sm">${escapeHtml(t.camelot || '?')}</span>
+            <span class="bpm-pill-sm">${Number(t.bpm || 0).toFixed(1)} BPM</span>
+            <span class="dna-pill-sm ${dnaClass}">DNA: ${dnaPct}%</span>
+          </div>
           <div class="reject-reason-tag">
-            ⚠️ ${escapeHtml(t.rejectReason || 'Escluso per garantire coerenza stilistica e armonica al mix')}
+            ⚠️ ${escapeHtml(t.rejectReason || (dnaPct < 80 ? `DNA Fit ${dnaPct}% (< 80% minimo)` : 'Fuori range o outlier'))}
           </div>
         </div>
-        <button type="button" class="rb-btn ghost sm btn-restore-track" data-idx="${idx}" title="Forza il reinserimento di questo brano nel mix">➕ Reinserisci nel Mix</button>
+        <div class="rejected-card-actions">
+          <button type="button" class="rb-btn ghost xs btn-preview-rejected" data-idx="${idx}" title="Preascolta questo brano">▶</button>
+          <button type="button" class="rb-btn secondary xs btn-restore-track" data-idx="${idx}" title="Forza il reinserimento di questo brano nella playlist ottimizzata">➕ Reinserisci</button>
+        </div>
       </div>
-    `)
+    `;
+    })
     .join("");
+
+  rejectedList.querySelectorAll(".btn-preview-rejected").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const rIdx = parseInt(btn.dataset.idx, 10);
+      const track = state.rejectedTracks[rIdx];
+      if (track) playCustomTrack(track, "SCARTO");
+    });
+  });
 
   rejectedList.querySelectorAll(".btn-restore-track").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -2207,11 +2233,17 @@ function renderRejectedTracks() {
       const [restored] = state.rejectedTracks.splice(rIdx, 1);
       if (restored) {
         state.currentTracks.push(restored);
+        state.isOptimized = false;
         state.afterMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
         updateKpiDisplay();
         renderTracksTable();
-  updateLinkedAudioBadge();
+        updateLinkedAudioBadge();
         renderRejectedTracks();
+        showToast(`➕ "${restored.title}" reinserito nel mix. Clicca 'Ottimizza' per riordinare.`);
+        if (btnRunAnalyzer) {
+          btnRunAnalyzer.classList.add("pulse-glow");
+          btnRunAnalyzer.innerHTML = "⚡ Ricalcola Ordine con Brano Reinserito";
+        }
       }
     });
   });
@@ -2434,6 +2466,39 @@ function playTrackAtIndex(idx, autoStart = true) {
   renderTracksTable();
   updateLinkedAudioBadge();
   scrollActiveTrackIntoView(idx);
+}
+
+function playCustomTrack(track, label = "SCARTO") {
+  if (!track) return;
+  const audioSrc = getTrackAudioSource(track);
+  if (!audioSrc) {
+    promptForAudioFolder(0, false);
+    return;
+  }
+  if (state.currentObjectUrl) {
+    URL.revokeObjectURL(state.currentObjectUrl);
+    state.currentObjectUrl = null;
+  }
+  if (audioSrc.type === "blob") {
+    state.currentObjectUrl = audioSrc.url;
+  }
+  state.playingTrackId = track.id;
+  state.currentTrackIndex = -1;
+  state.isPlaylistMode = false;
+
+  previewAudioEl.src = audioSrc.url;
+  miniPlayerBar.hidden = false;
+
+  if (mpBadge) mpBadge.textContent = label;
+  if (mpPosBadge) mpPosBadge.textContent = "🗑️";
+  if (mpTitle) mpTitle.textContent = track.title;
+  if (mpArtist) mpArtist.textContent = `${track.artist} (${track.camelot} • ${Number(track.bpm).toFixed(1)} BPM)`;
+  if (mpPlayPause) mpPlayPause.textContent = "⏸ Pausa";
+
+  previewAudioEl.play().catch(err => {
+    console.warn("Autoplay scarto audio bloccato:", err);
+  });
+  renderTracksTable();
 }
 
 function togglePlayTrackAtIndex(idx) {
@@ -3082,6 +3147,17 @@ btnCloseGuideFooter.addEventListener("click", () => { guideModal.hidden = true; 
 guideModal.addEventListener("click", (e) => {
   if (e.target === guideModal) guideModal.hidden = true;
 });
+
+// Toggle Colonna Scarti (Affiancata o Ridotta)
+const btnToggleRejectedCol = document.getElementById("btnToggleRejectedCol");
+const tracksSplitContainer = document.getElementById("tracksSplitContainer");
+if (btnToggleRejectedCol && tracksSplitContainer) {
+  btnToggleRejectedCol.addEventListener("click", () => {
+    const isCollapsed = tracksSplitContainer.classList.toggle("rejected-collapsed");
+    btnToggleRejectedCol.textContent = isCollapsed ? "⇤ Espandi" : "⇥ Riduci";
+    btnToggleRejectedCol.title = isCollapsed ? "Espandi la colonna dei brani scartati" : "Riduci la colonna dei brani scartati";
+  });
+}
 
 // Startup
 checkLocalServer();
