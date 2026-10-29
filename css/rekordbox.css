@@ -654,6 +654,35 @@ code {
   }
 }
 
+.badge-dsp-real {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.badge-dsp-est {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* ─── DSP PROGRESS ───────────────────────────────────────────────────────── */
 .dsp-progress-box {
   background: rgba(9, 13, 22, 0.85);

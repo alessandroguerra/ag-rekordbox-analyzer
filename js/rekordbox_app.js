@@ -664,15 +664,33 @@ function ensureTrackMetrics(track, profile) {
     track.energy = Math.max(3.5, Math.min(9.6, +(6.2 + bpmFactor + ratingBonus + cueBonus).toFixed(1)));
   }
 
+  // Modulazione individualizzata per ciascuna traccia (variazione deterministica basata su firma metadati)
+  const seedStr = `${track.artist || ''}-${track.title || ''}-${track.id || ''}-${track.duration || 240}`;
+  let seed = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    seed = ((seed << 5) - seed) + seedStr.charCodeAt(i);
+    seed |= 0;
+  }
+  const posSeed = Math.abs(seed);
+  const subVar = (((posSeed % 11) - 5) * 0.6); // -3.0% .. +3.0%
+  const kickVar = ((((posSeed >> 3) % 9) - 4) * 0.5); // -2.0% .. +2.0%
+  const percVar = ((((posSeed >> 5) % 13) - 6) * 0.7); // -4.2% .. +4.2%
+  const brightVar = ((((posSeed >> 2) % 15) - 7) * 40); // -280Hz .. +280Hz
+
+  const finalSub = +(Math.max(18.0, Math.min(42.0, baseSub + subVar))).toFixed(1);
+  const finalKick = +(Math.max(18.0, Math.min(38.0, baseKick + kickVar))).toFixed(1);
+  const finalPerc = +(Math.max(45.0, Math.min(88.0, basePerc + percVar))).toFixed(1);
+  const finalBright = Math.max(1200, Math.min(4500, Math.round(baseBright + brightVar)));
+
   track.metrics = track.metrics || {
-    sub_bass_pct: baseSub,
-    kick_bass_pct: baseKick,
-    low_mid_pct: +(100 - baseSub - baseKick - baseMid - baseAir).toFixed(1),
+    sub_bass_pct: finalSub,
+    kick_bass_pct: finalKick,
+    low_mid_pct: +(100 - finalSub - finalKick - baseMid - baseAir).toFixed(1),
     mid_presence_pct: baseMid,
     high_air_pct: baseAir,
-    percussive_pct: basePerc,
+    percussive_pct: finalPerc,
     pulse_clarity: +(0.40 + (track.energy / 20)).toFixed(2),
-    brightness_hz: baseBright
+    brightness_hz: finalBright
   };
 }
 
@@ -1730,7 +1748,7 @@ function selectPlaylist(playlistId, preserveCustomBpm = false) {
     btnRunAnalyzer.classList.remove("pulse-glow");
   }
   if (btnPlayPlaylist) btnPlayPlaylist.disabled = state.currentTracks.length === 0;
-  btnRunDeepDsp.disabled = (state.localAudioFiles.size === 0 && !state.localServerAvailable) || state.currentTracks.length === 0;
+  btnRunDeepDsp.disabled = state.currentTracks.length === 0;
 
   populateOpenerSelect(state.originalTracks);
   renderPlaylistSidebar();
@@ -2040,7 +2058,10 @@ function renderTracksTable() {
     const groovePct = Math.round(m.percussive_pct || 60);
 
     const dnaClass = t.dnaFitPct >= 80 ? "high" : t.dnaFitPct >= 65 ? "mid" : "low";
-    const dspTag = t.dspAnalyzed ? `<span title="Analizzato con Web Audio DSP reale">🔬</span>` : "";
+    const isRealDsp = !!t.dspAnalyzed;
+    const dspTag = isRealDsp 
+      ? `<span class="badge-dsp-real" title="Analizzato con Web Audio DSP reale sui byte dell'MP3">🔬 DSP Reale</span>` 
+      : `<span class="badge-dsp-est" title="Stima spettrale dai metadati XML. Collega la cartella audio per l'ascolto reale">~ Stima XML</span>`;
 
     const tr = t.transitionToNext;
     let transHtml = `<span style="color: var(--text-dim); font-size: 0.75rem;">🏁 Fine DJ Set</span>`;
@@ -2088,11 +2109,13 @@ function renderTracksTable() {
               <strong>E: ${Number(t.energy).toFixed(1)}${t.explicitEnergyTag ? ` (${t.explicitEnergyTag})` : ''}</strong>
               <div class="energy-bar-bg"><div class="energy-bar-fill" style="width:${energyPct}%"></div></div>
             </div>
-            <div class="eq-tags">Sub+Kick: ${subKick}% • Groove: ${groovePct}%</div>
+            <div class="eq-tags ${isRealDsp ? 'is-real' : 'is-est'}">
+              Sub+Kick: ${subKick}% • Groove: ${groovePct}% ${dspTag}
+            </div>
           </div>
         </td>
         <td>
-          <span class="dna-pill ${dnaClass}">${t.dnaFitPct}% ${dspTag}</span>
+          <span class="dna-pill ${dnaClass}">${t.dnaFitPct}%</span>
         </td>
         <td>${transHtml}</td>
         <td>
