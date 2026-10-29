@@ -538,8 +538,8 @@ function curateAndFilterPlaylistOutliers(tracks, profile, filterMode, plName, op
       reasons.push(`BPM ${bpm.toFixed(1)} fuori range armonico (${(medianBpm - bpmTolerance).toFixed(1)}–${(medianBpm + bpmTolerance).toFixed(1)})`);
     }
 
-    // 4. DNA Fit sotto soglia di selettività
-    const fitMin = isStrict ? 70 : 58;
+    // 4. DNA Fit sotto soglia di selettività (Soglia 80% in modalità Ultra-Selettiva)
+    const fitMin = isStrict ? 80 : 70;
     if (t.dnaFitPct < fitMin) {
       reasons.push(`Affinità DNA acustico insufficiente (${t.dnaFitPct}% < ${fitMin}%)`);
     }
