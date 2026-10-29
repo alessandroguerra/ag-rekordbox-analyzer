@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#080b12">
   <title>AlexGherra — Rekordbox DJ Set Analyzer &amp; Mix Optimizer</title>
-  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_1511">
+  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_1547">
 </head>
 <body class="ag-pin-locked">
 
@@ -17,7 +17,7 @@
       <div>
         <h1 class="rb-title">AG Rekordbox Mix Optimizer</h1>
         <div class="rb-updated-tag">
-          Ultima modifica: <strong id="appLastUpdated">29/10/2026 15:11</strong>
+          Ultima modifica: <strong id="appLastUpdated">29/10/2026 15:47</strong>
         </div>
         <p class="rb-subtitle">DJSet_Analyzer • DNA Acustico 46-dim • Ruota di Camelot • Sequencer 2-Opt</p>
       </div>
@@ -152,6 +152,25 @@
               <option value="push_bottom">🔻 Sposta i brani meno affini in fondo (Bonus Tracks)</option>
               <option value="keep_all">📦 Conservativo (Mantieni tutti i brani senza scarti)</option>
             </select>
+          </div>
+
+          <div class="ctrl-field bpm-range-field">
+            <div class="bpm-label-row">
+              <label for="bpmMinInput">🎚️ Range BPM Desiderato</label>
+              <button type="button" id="btnResetBpmRange" class="rb-btn ghost xs" title="Ripristina il range BPM consigliato dal profilo">Auto</button>
+            </div>
+            <div class="bpm-inputs-row">
+              <div class="bpm-input-box">
+                <span class="bpm-prefix">Min</span>
+                <input type="number" id="bpmMinInput" class="rb-input-num" min="80" max="180" step="0.5" value="122" placeholder="122">
+              </div>
+              <span class="bpm-sep">—</span>
+              <div class="bpm-input-box">
+                <span class="bpm-prefix">Max</span>
+                <input type="number" id="bpmMaxInput" class="rb-input-num" min="80" max="180" step="0.5" value="130" placeholder="130">
+              </div>
+              <span class="bpm-unit">BPM</span>
+            </div>
           </div>
         </div>
 
@@ -370,9 +389,9 @@
   <!-- TOAST NOTIFICATION -->
   <div id="rbToast" class="rb-toast" role="status" aria-live="polite"></div>
 
-  <script src="./js/profiles_data.js?v=20261029_1511"></script>
-  <script src="./js/ag_pin_guard.js?v=20261029_1511"></script>
-  <script src="./js/rekordbox_app.js?v=20261029_1511"></script>
+  <script src="./js/profiles_data.js?v=20261029_1547"></script>
+  <script src="./js/ag_pin_guard.js?v=20261029_1547"></script>
+  <script src="./js/rekordbox_app.js?v=20261029_1547"></script>
 </body>
 </html>
 

@@ -74,7 +74,8 @@ const state = {
   currentTrackIndex: -1,
   currentObjectUrl: null,
   isPlaylistMode: false,
-  pendingPlayTrackIndex: null
+  pendingPlayTrackIndex: null,
+  hasUserCustomBpm: false
 };
 
 // ─── DOM References ──────────────────────────────────────────────────────────
@@ -103,6 +104,9 @@ const profileSelect = document.getElementById("profileSelect");
 const curveSelect = document.getElementById("curveSelect");
 const openerSelect = document.getElementById("openerSelect");
 const filterModeSelect = document.getElementById("filterModeSelect");
+const bpmMinInput = document.getElementById("bpmMinInput");
+const bpmMaxInput = document.getElementById("bpmMaxInput");
+const btnResetBpmRange = document.getElementById("btnResetBpmRange");
 
 const dspProgressBox = document.getElementById("dspProgressBox");
 const dspProgressLabel = document.getElementById("dspProgressLabel");
@@ -479,6 +483,26 @@ function getCamelotNeighbors(c) {
 }
 
 /**
+ * Gestione Range BPM interattivo a video (Min/Max).
+ */
+function getUserBpmRange(profile) {
+  const userMin = bpmMinInput ? parseFloat(bpmMinInput.value) : NaN;
+  const userMax = bpmMaxInput ? parseFloat(bpmMaxInput.value) : NaN;
+  const prefBpm = (profile && profile.preferred_bpm_range) || { min: 122, max: 130 };
+  const minBpm = !isNaN(userMin) && userMin > 0 ? userMin : (Number(prefBpm.min) || 122);
+  const maxBpm = !isNaN(userMax) && userMax >= minBpm ? userMax : (Number(prefBpm.max) || 130);
+  return { min: minBpm, max: maxBpm };
+}
+
+function syncBpmInputsFromProfile(profile, force = false) {
+  if (!bpmMinInput || !bpmMaxInput) return;
+  if (state.hasUserCustomBpm && !force) return;
+  const rng = (profile && profile.preferred_bpm_range) || { min: 122, max: 130 };
+  bpmMinInput.value = rng.min || 122;
+  bpmMaxInput.value = rng.max || 130;
+}
+
+/**
  * Curatore Selettivo: filtra ed espelle dal pool i brani che non hanno coerenza
  * stilistica, armonica, energetica o ritmica con l'identità del mix.
  */
@@ -532,10 +556,13 @@ function curateAndFilterPlaylistOutliers(tracks, profile, filterMode, plName, op
       }
     }
 
-    // 3. Outlier BPM
+    // 3. Controllo Range BPM (rispetta il range impostato a video da Alex)
     const bpm = Number(t.bpm) || medianBpm;
-    if (Math.abs(bpm - medianBpm) > bpmTolerance) {
-      reasons.push(`BPM ${bpm.toFixed(1)} fuori range armonico (${(medianBpm - bpmTolerance).toFixed(1)}–${(medianBpm + bpmTolerance).toFixed(1)})`);
+    const userBpm = getUserBpmRange(profile);
+    if (bpm < userBpm.min || bpm > userBpm.max) {
+      reasons.push(`BPM ${bpm.toFixed(1)} fuori dal range consentito [${userBpm.min.toFixed(1)}–${userBpm.max.toFixed(1)}]`);
+    } else if (Math.abs(bpm - medianBpm) > bpmTolerance) {
+      reasons.push(`BPM ${bpm.toFixed(1)} scostato dalla media del set (${medianBpm.toFixed(1)} ± ${bpmTolerance.toFixed(1)})`);
     }
 
     // 4. DNA Fit sotto soglia di selettività (Taglio rigido a 80%: nessun brano < 80% è ammesso nel mix)
@@ -652,17 +679,17 @@ function ensureTrackMetrics(track, profile) {
 function scoreTrackAgainstProfile(track, profile) {
   ensureTrackMetrics(track, profile);
 
-  const bpmRange = (profile && profile.preferred_bpm_range) || { min: 122, max: 130 };
-  const minBpm = Number(bpmRange.min) || 122;
-  const maxBpm = Number(bpmRange.max) || 130;
+  const userBpm = getUserBpmRange(profile);
+  const minBpm = userBpm.min;
+  const maxBpm = userBpm.max;
   const midBpm = (minBpm + maxBpm) / 2;
 
   const bpm = Number(track.bpm) || midBpm;
   let bpmScore = 1.0;
   if (bpm < minBpm) {
-    bpmScore = Math.max(0.2, 1.0 - (minBpm - bpm) * 0.08);
+    bpmScore = Math.max(0.15, 1.0 - (minBpm - bpm) * 0.12);
   } else if (bpm > maxBpm) {
-    bpmScore = Math.max(0.2, 1.0 - (bpm - maxBpm) * 0.08);
+    bpmScore = Math.max(0.15, 1.0 - (bpm - maxBpm) * 0.12);
   } else {
     bpmScore = 1.0 - (Math.abs(bpm - midBpm) / Math.max(4, maxBpm - minBpm)) * 0.12;
   }
@@ -1589,6 +1616,8 @@ function selectPlaylist(playlistId) {
     })
     .filter(Boolean);
 
+  syncBpmInputsFromProfile(profile, false);
+
   const seps = [];
   const duplicates = [];
   const lowDna = [];
@@ -1623,6 +1652,17 @@ function selectPlaylist(playlistId) {
 
     for (const s of sigs) {
       seenSignatures.set(s, t);
+    }
+
+    // Controllo BPM Range impostato a video
+    const userBpm = getUserBpmRange(profile);
+    const bpmVal = Number(t.bpm) || 0;
+    if (bpmVal > 0 && (bpmVal < userBpm.min || bpmVal > userBpm.max)) {
+      lowDna.push({
+        ...t,
+        rejectReason: `BPM ${bpmVal.toFixed(1)} fuori dal range impostato [${userBpm.min.toFixed(1)}–${userBpm.max.toFixed(1)}]`
+      });
+      continue;
     }
 
     // Scarto immediato se il DNA Fit è inferiore all'80%
@@ -2803,18 +2843,61 @@ profileSelect.addEventListener("change", () => {
   if (state.activePlaylistId) {
     const pl = state.playlists.find(p => p.id === state.activePlaylistId);
     const profile = getActiveProfile(pl ? pl.name : "", state.currentTracks);
+    syncBpmInputsFromProfile(profile, true);
     state.originalTracks.forEach(t => scoreTrackAgainstProfile(t, profile));
     state.currentTracks.forEach(t => scoreTrackAgainstProfile(t, profile));
     if (state.isOptimized) {
       runPlaylistOptimizer();
     } else {
-      state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
-      updateKpiDisplay();
-      renderTracksTable();
-  updateLinkedAudioBadge();
+      selectPlaylist(state.activePlaylistId);
     }
   }
 });
+
+let bpmDebounceTimer = null;
+function handleBpmInputChange() {
+  state.hasUserCustomBpm = true;
+  clearTimeout(bpmDebounceTimer);
+  bpmDebounceTimer = setTimeout(() => {
+    if (!state.activePlaylistId) return;
+    const pl = state.playlists.find(p => p.id === state.activePlaylistId);
+    const profile = getActiveProfile(pl ? pl.name : "", state.originalTracks);
+    state.originalTracks.forEach(t => scoreTrackAgainstProfile(t, profile));
+    if (state.isOptimized) {
+      runPlaylistOptimizer();
+    } else {
+      selectPlaylist(state.activePlaylistId);
+    }
+    const rng = getUserBpmRange(profile);
+    showToast(`🎚️ Range BPM applicato: ${rng.min.toFixed(1)} – ${rng.max.toFixed(1)} BPM`);
+  }, 350);
+}
+
+if (bpmMinInput) {
+  bpmMinInput.addEventListener("input", handleBpmInputChange);
+  bpmMinInput.addEventListener("change", handleBpmInputChange);
+}
+if (bpmMaxInput) {
+  bpmMaxInput.addEventListener("input", handleBpmInputChange);
+  bpmMaxInput.addEventListener("change", handleBpmInputChange);
+}
+if (btnResetBpmRange) {
+  btnResetBpmRange.addEventListener("click", () => {
+    if (!state.activePlaylistId) return;
+    const pl = state.playlists.find(p => p.id === state.activePlaylistId);
+    const profile = getActiveProfile(pl ? pl.name : "", state.originalTracks);
+    state.hasUserCustomBpm = false;
+    syncBpmInputsFromProfile(profile, true);
+    state.originalTracks.forEach(t => scoreTrackAgainstProfile(t, profile));
+    if (state.isOptimized) {
+      runPlaylistOptimizer();
+    } else {
+      selectPlaylist(state.activePlaylistId);
+    }
+    const rng = getUserBpmRange(profile);
+    showToast(`🔄 Range BPM ripristinato dal profilo: ${rng.min.toFixed(1)} – ${rng.max.toFixed(1)} BPM`);
+  });
+}
 
 curveSelect.addEventListener("change", () => {
   if (state.isOptimized) {

@@ -502,6 +502,88 @@ code {
   color: var(--text-muted);
 }
 
+.bpm-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bpm-inputs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+}
+
+.bpm-input-box {
+  display: flex;
+  align-items: center;
+  background: rgba(14, 19, 31, 0.95);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  flex: 1;
+  height: 100%;
+  transition: all 0.15s ease;
+}
+
+.bpm-input-box:focus-within {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0, 210, 190, 0.25);
+}
+
+.bpm-prefix {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-right: 6px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.rb-input-num {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--accent-cyan);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.rb-input-num::-webkit-outer-spin-button,
+.rb-input-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.rb-input-num[type=number] {
+  -moz-appearance: textfield;
+}
+
+.bpm-sep {
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.bpm-unit {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.rb-btn.xs {
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
 /* ─── DSP PROGRESS ───────────────────────────────────────────────────────── */
 .dsp-progress-box {
   background: rgba(9, 13, 22, 0.85);
