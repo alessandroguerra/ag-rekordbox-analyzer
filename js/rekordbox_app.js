@@ -274,6 +274,73 @@ function isSeparatorTrack(track) {
 }
 
 /**
+ * Genera firme univoche di deduplicazione per una traccia.
+ * Riconosce duplicati per:
+ * 1. Stesso percorso file / URL
+ * 2. Stesso Artista e Titolo normalizzati (rimuovendo numerazioni 041-, tag E5/E6, [2026], suffissi copia (1), copy)
+ * 3. Stessa composizione base (stesso Artista e stesso Titolo Core senza mix es. Original Mix vs Extended Mix)
+ */
+function extractTrackDedupSignatures(track) {
+  const sigs = [];
+  const loc = (track.localPath || track.location || "").trim().toLowerCase();
+  if (loc) {
+    sigs.push(`loc__${loc}`);
+  }
+
+  const rawFn = loc.split(/[\\/]/).pop() || "";
+  let fn = rawFn.replace(/\.[a-z0-9]{2,4}$/i, "");
+  // Rimuovi numerazioni iniziali (es. 041 -, 117 -)
+  let fnClean = fn.replace(/^\d{1,4}\s*[-._]\s*/, "");
+  // Rimuovi prefissi AlexGherra: TechHouse-E6-[2026]-, House-E7-[2014]-, etc.
+  fnClean = fnClean.replace(/^[a-z0-9()]+-e\d{1,2}-\[\d{4}\]-/i, "");
+  // Rimuovi suffissi copia: (1), (2), - copy
+  fnClean = fnClean.replace(/\s*\(\d+\)$/, "");
+  fnClean = fnClean.replace(/\s*-\s*copy$/i, "");
+
+  let art = (track.artist || "").trim();
+  let tit = (track.title || "").trim();
+
+  // Se artist è generico o non impostato, prova a splittarlo da fnClean
+  if ((!art || art.toLowerCase() === "artista" || art.toLowerCase() === "artista sconosciuto") && fnClean.includes(" - ")) {
+    const parts = fnClean.split(" - ");
+    art = parts[0].trim();
+    tit = parts.slice(1).join(" - ").trim();
+  }
+
+  if (!tit) tit = fnClean;
+
+  let titClean = tit
+    .replace(/^\d{1,4}\s*[-._]\s*/, "")
+    .replace(/^[a-z0-9()]+-e\d{1,2}-\[\d{4}\]-/i, "")
+    .replace(/\s*\(\d+\)$/, "")
+    .replace(/\s*-\s*copy$/i, "");
+
+  const normArt = art.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normTit = titClean.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normFn = fnClean.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  if (normArt && normTit) {
+    sigs.push(`art_tit__${normArt}__${normTit}`);
+  } else if (normFn) {
+    sigs.push(`fn__${normFn}`);
+  }
+
+  // Core song title (senza remix o mix tag: es. "Bongo (Extended Mix)" -> "Bongo")
+  let coreTit = titClean
+    .replace(/\s*\(.*(mix|remix|edit|dub|vip|version|re-edit|cut).*\)$/i, "")
+    .replace(/\s*\[.*(mix|remix|edit|dub|vip|version|re-edit|cut).*\]$/i, "")
+    .replace(/\s*-\s*.*(mix|remix|edit|dub|vip|version).*$/i, "")
+    .trim();
+  const normCore = coreTit.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  if (normArt && normCore && normCore.length >= 3) {
+    sigs.push(`core__${normArt}__${normCore}`);
+  }
+
+  return sigs;
+}
+
+/**
  * Estrae la vibrazione stilistica sonora del brano analizzando titolo, remix, cartella e genere.
  */
 function extractTrackVibe(track) {
@@ -1344,22 +1411,55 @@ function selectPlaylist(playlistId) {
     })
     .filter(Boolean);
 
-  const seps = allTracks.filter(isSeparatorTrack);
-  const playable = allTracks.filter(t => !isSeparatorTrack(t));
+  const seps = [];
+  const duplicates = [];
+  const playable = [];
+  const seenSignatures = new Map();
 
-  state.rejectedTracks = seps.map(s => ({
-    ...s,
-    rejectReason: `Traccia segnaposto / separatore ignorata (${s.title || 'Separatore Rekordbox'})`
-  }));
+  for (const t of allTracks) {
+    if (isSeparatorTrack(t)) {
+      seps.push({
+        ...t,
+        rejectReason: `Traccia segnaposto / separatore ignorata (${t.title || 'Separatore Rekordbox'})`
+      });
+      continue;
+    }
 
+    const sigs = extractTrackDedupSignatures(t);
+    let matchedDup = null;
+    for (const s of sigs) {
+      if (seenSignatures.has(s)) {
+        matchedDup = seenSignatures.get(s);
+        break;
+      }
+    }
+
+    if (matchedDup) {
+      duplicates.push({
+        ...t,
+        rejectReason: `Traccia duplicata: già presente come #${matchedDup.originalPosition} (${matchedDup.artist} - ${matchedDup.title})`
+      });
+      continue;
+    }
+
+    for (const s of sigs) {
+      seenSignatures.set(s, t);
+    }
+    playable.push(t);
+  }
+
+  state.rejectedTracks = [...seps, ...duplicates];
   state.originalTracks = playable;
   state.currentTracks = state.originalTracks.map(t => ({ ...t }));
   state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
   state.afterMetrics = null;
 
   activePlaylistPath.textContent = pl.folderPath ? `CARTELLA: ${pl.folderPath}` : "PLAYLIST REKORDBOX";
-  const sepLabel = seps.length > 0 ? ` • 🧹 ${seps.length} separatore escluso` : "";
-  activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${sepLabel})`;
+  const badges = [];
+  if (seps.length > 0) badges.push(`🧹 ${seps.length} separatore escluso`);
+  if (duplicates.length > 0) badges.push(`✂️ ${duplicates.length} duplicati rimossi`);
+  const badgeText = badges.length > 0 ? ` • ${badges.join(" • ")}` : "";
+  activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${badgeText})`;
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
   btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
   btnRunDeepDsp.disabled = state.localAudioFiles.size === 0 || state.currentTracks.length === 0;
@@ -1368,7 +1468,7 @@ function selectPlaylist(playlistId) {
   renderPlaylistSidebar();
   updateKpiDisplay();
   renderTracksTable();
-  if (seps.length > 0) {
+  if (state.rejectedTracks.length > 0) {
     renderRejectedTracks();
     rejectedBox.hidden = false;
   } else {
@@ -1478,17 +1578,19 @@ async function runPlaylistOptimizer() {
       }
     );
 
-    const existingSeps = (state.rejectedTracks || []).filter(isSeparatorTrack);
+    const existingExcluded = (state.rejectedTracks || []).filter(t => 
+      isSeparatorTrack(t) || (t.rejectReason && t.rejectReason.includes("duplicata"))
+    );
     if (filterMode === "push_bottom" && lowPool.length > 0) {
       const orderedLow = await sequenceDjSetOptimalAsync(lowPool, curveMode, "auto");
       state.currentTracks = [...orderedMain, ...orderedLow];
-      state.rejectedTracks = existingSeps;
+      state.rejectedTracks = existingExcluded;
     } else if (filterMode === "exclude_low" && lowPool.length > 0) {
       state.currentTracks = orderedMain;
-      state.rejectedTracks = [...existingSeps, ...lowPool];
+      state.rejectedTracks = [...existingExcluded, ...lowPool];
     } else {
       state.currentTracks = orderedMain;
-      state.rejectedTracks = existingSeps;
+      state.rejectedTracks = existingExcluded;
     }
 
     // STEP 4: Validazione Transizioni e Riepilogo Finale
@@ -1728,6 +1830,9 @@ function renderRejectedTracks() {
         <div>
           <strong>${escapeHtml(t.artist)} - ${escapeHtml(t.title)}</strong>
           <span style="color: var(--text-muted); margin-left: 8px;">${t.camelot} • ${t.bpm} BPM • DNA Fit: ${t.dnaFitPct}%</span>
+          <div style="font-size: 0.76rem; color: #f87171; margin-top: 3px;">
+            ⚠️ Motivo: ${escapeHtml(t.rejectReason || 'Escluso dal filtro')}
+          </div>
         </div>
         <button type="button" class="rb-btn ghost sm btn-restore-track" data-idx="${idx}">➕ Reinserisci nel Mix</button>
       </div>
