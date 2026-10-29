@@ -584,6 +584,76 @@ code {
   line-height: 1.2;
 }
 
+/* ─── RE-OPTIMIZE PROPOSAL BANNER ────────────────────────────────────────── */
+.reopt-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(0, 210, 190, 0.12));
+  border: 1px solid var(--accent-amber);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.15);
+  animation: fadeInDown 0.25s ease;
+}
+
+.reopt-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reopt-banner-icon {
+  font-size: 1.5rem;
+  color: var(--accent-amber);
+  animation: pulse-warn 1.5s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-warn {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+.reopt-banner-content strong {
+  color: #fff;
+  font-size: 0.88rem;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.reopt-banner-content p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.reopt-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pulse-glow {
+  animation: pulse-glow-anim 1.4s infinite !important;
+  box-shadow: 0 0 16px rgba(0, 210, 190, 0.6) !important;
+}
+
+@keyframes pulse-glow-anim {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 12px rgba(0, 210, 190, 0.4);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 0 22px rgba(0, 210, 190, 0.85);
+  }
+}
+
 /* ─── DSP PROGRESS ───────────────────────────────────────────────────────── */
 .dsp-progress-box {
   background: rgba(9, 13, 22, 0.85);

@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#080b12">
   <title>AlexGherra — Rekordbox DJ Set Analyzer &amp; Mix Optimizer</title>
-  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_1547">
+  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_1550">
 </head>
 <body class="ag-pin-locked">
 
@@ -17,7 +17,7 @@
       <div>
         <h1 class="rb-title">AG Rekordbox Mix Optimizer</h1>
         <div class="rb-updated-tag">
-          Ultima modifica: <strong id="appLastUpdated">29/10/2026 15:47</strong>
+          Ultima modifica: <strong id="appLastUpdated">29/10/2026 15:50</strong>
         </div>
         <p class="rb-subtitle">DJSet_Analyzer • DNA Acustico 46-dim • Ruota di Camelot • Sequencer 2-Opt</p>
       </div>
@@ -271,6 +271,25 @@
         <audio id="previewAudioEl" preload="metadata"></audio>
       </div>
 
+      <!-- RE-OPTIMIZE PROPOSAL BANNER (WHEN BPM RANGE CHANGES) -->
+      <div id="reoptBanner" class="reopt-banner" hidden>
+        <div class="reopt-banner-content">
+          <span class="reopt-banner-icon">⚡</span>
+          <div>
+            <strong>Range BPM modificato (<span id="reoptBpmLabel">124–126 BPM</span>)</strong>
+            <p>La composizione della playlist è cambiata in base ai nuovi filtri BPM. Ricalcola l'ordine per adattare il mix e garantire transizioni armoniche perfette.</p>
+          </div>
+        </div>
+        <div class="reopt-banner-actions">
+          <button id="btnReoptimizeFromBanner" class="rb-btn run-cta sm" type="button">
+            ⚡ Ricalcola Mix Perfetto
+          </button>
+          <button id="btnDismissReoptBanner" class="rb-btn ghost sm" type="button" title="Ignora e mantieni ordine corrente">
+            Ignora
+          </button>
+        </div>
+      </div>
+
       <!-- RESPONSIVE TRACKLIST TABLE -->
       <div tabindex="0" role="region" aria-labelledby="playlist-table-caption" class="table-wrapper">
         <table id="tracksTable" class="rb-table">
@@ -389,9 +408,9 @@
   <!-- TOAST NOTIFICATION -->
   <div id="rbToast" class="rb-toast" role="status" aria-live="polite"></div>
 
-  <script src="./js/profiles_data.js?v=20261029_1547"></script>
-  <script src="./js/ag_pin_guard.js?v=20261029_1547"></script>
-  <script src="./js/rekordbox_app.js?v=20261029_1547"></script>
+  <script src="./js/profiles_data.js?v=20261029_1550"></script>
+  <script src="./js/ag_pin_guard.js?v=20261029_1550"></script>
+  <script src="./js/rekordbox_app.js?v=20261029_1550"></script>
 </body>
 </html>
 

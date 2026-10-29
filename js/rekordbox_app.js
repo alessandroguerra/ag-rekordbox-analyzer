@@ -107,6 +107,10 @@ const filterModeSelect = document.getElementById("filterModeSelect");
 const bpmMinInput = document.getElementById("bpmMinInput");
 const bpmMaxInput = document.getElementById("bpmMaxInput");
 const btnResetBpmRange = document.getElementById("btnResetBpmRange");
+const reoptBanner = document.getElementById("reoptBanner");
+const reoptBpmLabel = document.getElementById("reoptBpmLabel");
+const btnReoptimizeFromBanner = document.getElementById("btnReoptimizeFromBanner");
+const btnDismissReoptBanner = document.getElementById("btnDismissReoptBanner");
 
 const dspProgressBox = document.getElementById("dspProgressBox");
 const dspProgressLabel = document.getElementById("dspProgressLabel");
@@ -1597,14 +1601,24 @@ function renderPlaylistSidebar() {
   });
 }
 
-function selectPlaylist(playlistId) {
+function selectPlaylist(playlistId, preserveCustomBpm = false) {
   const pl = state.playlists.find(p => p.id === playlistId);
   if (!pl) return;
 
   state.activePlaylistId = pl.id;
   state.isOptimized = false;
 
+  if (!preserveCustomBpm) {
+    state.hasUserCustomBpm = false;
+    if (reoptBanner) reoptBanner.hidden = true;
+    if (btnRunAnalyzer) btnRunAnalyzer.classList.remove("pulse-glow");
+  }
+
   const profile = getActiveProfile(pl.name, pl.trackIds.map(id => state.tracksById.get(id)).filter(Boolean));
+
+  if (!preserveCustomBpm) {
+    syncBpmInputsFromProfile(profile, true);
+  }
 
   const allTracks = pl.trackIds
     .map((id, idx) => {
@@ -1615,8 +1629,6 @@ function selectPlaylist(playlistId) {
       return copy;
     })
     .filter(Boolean);
-
-  syncBpmInputsFromProfile(profile, false);
 
   const seps = [];
   const duplicates = [];
@@ -1710,7 +1722,13 @@ function selectPlaylist(playlistId) {
   const badgeText = badges.length > 0 ? ` • ${badges.join(" • ")}` : "";
   activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${badgeText})`;
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
-  btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
+  if (preserveCustomBpm) {
+    btnRunAnalyzer.innerHTML = "⚡ Ricalcola Ordine (BPM Modificato)";
+    btnRunAnalyzer.classList.add("pulse-glow");
+  } else {
+    btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
+    btnRunAnalyzer.classList.remove("pulse-glow");
+  }
   if (btnPlayPlaylist) btnPlayPlaylist.disabled = state.currentTracks.length === 0;
   btnRunDeepDsp.disabled = (state.localAudioFiles.size === 0 && !state.localServerAvailable) || state.currentTracks.length === 0;
 
@@ -1740,6 +1758,9 @@ function populateOpenerSelect(tracks) {
 
 async function runPlaylistOptimizer() {
   if (state.originalTracks.length === 0) return;
+
+  if (reoptBanner) reoptBanner.hidden = true;
+  if (btnRunAnalyzer) btnRunAnalyzer.classList.remove("pulse-glow");
 
   const overlay = document.getElementById("optimizerLoadingOverlay");
   const origBtnHtml = btnRunAnalyzer.innerHTML;
@@ -2862,15 +2883,26 @@ function handleBpmInputChange() {
     if (!state.activePlaylistId) return;
     const pl = state.playlists.find(p => p.id === state.activePlaylistId);
     const profile = getActiveProfile(pl ? pl.name : "", state.originalTracks);
-    state.originalTracks.forEach(t => scoreTrackAgainstProfile(t, profile));
-    if (state.isOptimized) {
-      runPlaylistOptimizer();
-    } else {
-      selectPlaylist(state.activePlaylistId);
-    }
+    
+    // Ricalcola filtri e brani scartati preservando il BPM modificato dall'utente
+    selectPlaylist(state.activePlaylistId, true);
+    
     const rng = getUserBpmRange(profile);
-    showToast(`🎚️ Range BPM applicato: ${rng.min.toFixed(1)} – ${rng.max.toFixed(1)} BPM`);
-  }, 350);
+    const bpmText = `${rng.min.toFixed(1)} – ${rng.max.toFixed(1)} BPM`;
+
+    // Mostra il banner di proposta ricalcolo e attiva l'animazione sul pulsante di ottimizzazione
+    if (reoptBanner && reoptBpmLabel) {
+      reoptBpmLabel.textContent = bpmText;
+      reoptBanner.hidden = false;
+    }
+    if (btnRunAnalyzer) {
+      btnRunAnalyzer.innerHTML = "⚡ Ricalcola Mix Perfetto (BPM Modificato)";
+      btnRunAnalyzer.classList.add("pulse-glow");
+      btnRunAnalyzer.disabled = state.currentTracks.length < 2;
+    }
+
+    showToast(`🎚️ Range BPM impostato a ${bpmText}. Rilancia l'ottimizzazione per adattare la sequenza del set!`);
+  }, 400);
 }
 
 if (bpmMinInput) {
@@ -2887,15 +2919,29 @@ if (btnResetBpmRange) {
     const pl = state.playlists.find(p => p.id === state.activePlaylistId);
     const profile = getActiveProfile(pl ? pl.name : "", state.originalTracks);
     state.hasUserCustomBpm = false;
+    if (reoptBanner) reoptBanner.hidden = true;
+    if (btnRunAnalyzer) btnRunAnalyzer.classList.remove("pulse-glow");
     syncBpmInputsFromProfile(profile, true);
-    state.originalTracks.forEach(t => scoreTrackAgainstProfile(t, profile));
-    if (state.isOptimized) {
-      runPlaylistOptimizer();
-    } else {
-      selectPlaylist(state.activePlaylistId);
-    }
+    selectPlaylist(state.activePlaylistId, false);
     const rng = getUserBpmRange(profile);
     showToast(`🔄 Range BPM ripristinato dal profilo: ${rng.min.toFixed(1)} – ${rng.max.toFixed(1)} BPM`);
+  });
+}
+
+if (btnReoptimizeFromBanner) {
+  btnReoptimizeFromBanner.addEventListener("click", () => {
+    if (reoptBanner) reoptBanner.hidden = true;
+    runPlaylistOptimizer();
+  });
+}
+
+if (btnDismissReoptBanner) {
+  btnDismissReoptBanner.addEventListener("click", () => {
+    if (reoptBanner) reoptBanner.hidden = true;
+    if (btnRunAnalyzer) {
+      btnRunAnalyzer.classList.remove("pulse-glow");
+      btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
+    }
   });
 }
 
