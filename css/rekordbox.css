@@ -88,6 +88,27 @@ code {
   letter-spacing: -0.01em;
 }
 
+.rb-updated-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--accent-cyan);
+  font-weight: 500;
+  margin: 1px 0 2px 0;
+  letter-spacing: 0.01em;
+}
+
+.rb-updated-tag::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+
 .rb-subtitle {
   font-size: 0.78rem;
   color: var(--text-muted);
