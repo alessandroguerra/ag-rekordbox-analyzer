@@ -581,11 +581,26 @@ function scoreTrackAgainstProfile(track, profile) {
 
 // ─── Web Audio API Real DSP Analyzer (In-Browser Local Files) ────────────────
 
-async function analyzeAudioFileWebDSP(file, existingTrack) {
+async function analyzeAudioFileWebDSP(source, existingTrack) {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) return null;
 
-  const arrayBuffer = await file.arrayBuffer();
+  let arrayBuffer;
+  try {
+    if (source && typeof source.arrayBuffer === "function") {
+      arrayBuffer = await source.arrayBuffer();
+    } else if (typeof source === "string") {
+      const res = await fetch(source);
+      if (!res.ok) return null;
+      arrayBuffer = await res.arrayBuffer();
+    } else {
+      return null;
+    }
+  } catch (err) {
+    console.warn("Impossibile caricare arrayBuffer per DSP:", err);
+    return null;
+  }
+
   const tempCtx = new AudioCtx();
   let audioBuffer;
   try {
@@ -1472,7 +1487,7 @@ function selectPlaylist(playlistId) {
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
   btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
   if (btnPlayPlaylist) btnPlayPlaylist.disabled = state.currentTracks.length === 0;
-  btnRunDeepDsp.disabled = state.localAudioFiles.size === 0 || state.currentTracks.length === 0;
+  btnRunDeepDsp.disabled = (state.localAudioFiles.size === 0 && !state.localServerAvailable) || state.currentTracks.length === 0;
 
   populateOpenerSelect(state.originalTracks);
   renderPlaylistSidebar();
@@ -1519,8 +1534,8 @@ async function runPlaylistOptimizer() {
     );
     await yieldToBrowser(60);
 
-    // Se ci sono file audio locali collegati e non ancora analizzati via DSP, analizziamoli!
-    if (state.localAudioFiles.size > 0) {
+    // Se ci sono file audio locali collegati o server locale attivo, esegue l'analisi DSP reale!
+    if (state.localAudioFiles.size > 0 || state.localServerAvailable) {
       await runLocalWebDspOnCurrentPlaylist(false);
     }
 
@@ -1921,7 +1936,12 @@ function indexLocalAudioFiles(fileList) {
 }
 
 async function runLocalWebDspOnCurrentPlaylist(triggerOptimizeAfter = true) {
-  if (state.originalTracks.length === 0 || state.localAudioFiles.size === 0) return;
+  if (state.originalTracks.length === 0) return;
+  const hasAudioSource = state.localAudioFiles.size > 0 || state.localServerAvailable;
+  if (!hasAudioSource) {
+    promptForAudioFolder(0, false);
+    return;
+  }
 
   const pl = state.playlists.find(p => p.id === state.activePlaylistId);
   const profile = getActiveProfile(pl ? pl.name : "", state.originalTracks);
@@ -1940,10 +1960,11 @@ async function runLocalWebDspOnCurrentPlaylist(triggerOptimizeAfter = true) {
     dspProgressPct.textContent = `${pct}%`;
     dspProgressFill.style.width = `${pct}%`;
 
-    const file = findMatchingLocalAudioFile(t);
-    if (file && !t.dspAnalyzed) {
+    const audioSrc = getTrackAudioSource(t);
+    if (audioSrc && !t.dspAnalyzed) {
       try {
-        const dspRes = await analyzeAudioFileWebDSP(file, t);
+        const dspTarget = audioSrc.type === "blob" ? audioSrc.file : audioSrc.url;
+        const dspRes = await analyzeAudioFileWebDSP(dspTarget, t);
         if (dspRes) {
           t.energy = dspRes.energy;
           t.metrics = dspRes.metrics;
@@ -1952,7 +1973,7 @@ async function runLocalWebDspOnCurrentPlaylist(triggerOptimizeAfter = true) {
           analyzedCount++;
         }
       } catch (err) {
-        console.warn("DSP decode warning on", file.name, err);
+        console.warn("DSP decode warning on", t.title, err);
       }
     }
     // Sincronizza anche in currentTracks
@@ -2419,6 +2440,9 @@ async function checkLocalServer() {
       engineStatusBadge.classList.add("server-mode");
       engineStatusText.textContent = `Server Locale Attivo (${data.engine || "CLAP GPU + Librosa"})`;
       btnLoadLocalRb.hidden = false;
+      if (btnRunDeepDsp && state.currentTracks.length > 0) {
+        btnRunDeepDsp.disabled = false;
+      }
     }
   } catch (_) {
     state.localServerAvailable = false;
