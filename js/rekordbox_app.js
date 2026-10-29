@@ -1739,6 +1739,21 @@ function selectPlaylist(playlistId, preserveCustomBpm = false) {
   if (lowDna.length > 0) badges.push(`🧬 ${lowDna.length} scartati (DNA Fit < 80%)`);
   const badgeText = badges.length > 0 ? ` • ${badges.join(" • ")}` : "";
   activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${badgeText})`;
+
+  const headerTrackCountBadge = document.getElementById("headerTrackCountBadge");
+  const headerBpmSummaryBadge = document.getElementById("headerBpmSummaryBadge");
+  if (headerTrackCountBadge) {
+    headerTrackCountBadge.textContent = `${state.currentTracks.length} brani`;
+  }
+  if (headerBpmSummaryBadge) {
+    const validBpms = state.currentTracks.map(t => t.bpm).filter(b => b > 0);
+    if (validBpms.length > 0) {
+      headerBpmSummaryBadge.textContent = `${Math.round(Math.min(...validBpms))}–${Math.round(Math.max(...validBpms))} BPM`;
+    } else {
+      headerBpmSummaryBadge.textContent = "-- BPM";
+    }
+  }
+
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
   if (preserveCustomBpm) {
     btnRunAnalyzer.innerHTML = "⚡ Ricalcola Ordine (BPM Modificato)";
@@ -2205,17 +2220,30 @@ function renderRejectedTracks() {
 // ─── Local Audio Folder Linking & Web Audio DSP Batch Runner ────────────────
 
 function updateLinkedAudioBadge() {
+  if (!linkedAudioBadge) return;
   if (state.currentTracks && state.currentTracks.length > 0) {
     const matched = state.currentTracks.filter(t => !!findMatchingLocalAudioFile(t)).length;
     linkedAudioBadge.hidden = false;
-    linkedAudioBadge.textContent = `🎯 ${matched} / ${state.currentTracks.length} brani della playlist agganciati`;
-    btnRunDeepDsp.disabled = (matched === 0 && !state.localServerAvailable);
+    if (matched > 0) {
+      linkedAudioBadge.className = "audio-linked-pill matched";
+      linkedAudioBadge.textContent = `🟢 ${matched} / ${state.currentTracks.length} file MP3 agganciati (DSP Reale)`;
+    } else {
+      linkedAudioBadge.className = "audio-linked-pill unlinked";
+      linkedAudioBadge.textContent = `⚠️ 0 / ${state.currentTracks.length} file MP3 agganciati (Stima XML)`;
+    }
+    if (btnRunDeepDsp) btnRunDeepDsp.disabled = false;
   } else {
     const uniqueFiles = new Set(Array.from(state.localAudioFiles.values())).size;
     if (uniqueFiles > 0) {
       linkedAudioBadge.hidden = false;
-      linkedAudioBadge.textContent = `📁 ${uniqueFiles} file indicizzati nella cartella base`;
+      linkedAudioBadge.className = "audio-linked-pill matched";
+      linkedAudioBadge.textContent = `📁 ${uniqueFiles} file indicizzati`;
+    } else {
+      linkedAudioBadge.hidden = false;
+      linkedAudioBadge.className = "audio-linked-pill unlinked";
+      linkedAudioBadge.textContent = `⚠️ 0 file audio collegati`;
     }
+    if (btnRunDeepDsp) btnRunDeepDsp.disabled = true;
   }
 }
 

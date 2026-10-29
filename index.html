@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#080b12">
   <title>AlexGherra — Rekordbox DJ Set Analyzer &amp; Mix Optimizer</title>
-  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_1555">
+  <link rel="stylesheet" href="./css/rekordbox.css?v=20261029_1655">
 </head>
 <body class="ag-pin-locked">
 
@@ -17,7 +17,7 @@
       <div>
         <h1 class="rb-title">AG Rekordbox Mix Optimizer</h1>
         <div class="rb-updated-tag">
-          Ultima modifica: <strong id="appLastUpdated">29/10/2026 15:55</strong>
+          Ultima modifica: <strong id="appLastUpdated">29/10/2026 16:51</strong>
         </div>
         <p class="rb-subtitle">DJSet_Analyzer • DNA Acustico 46-dim • Ruota di Camelot • Sequencer 2-Opt</p>
       </div>
@@ -33,7 +33,7 @@
     </div>
   </header>
 
-  <!-- IMPORT BAR -->
+  <!-- IMPORT BAR: CARICAMENTO LIBRERIA / PLAYLIST -->
   <section class="rb-import-bar" id="dropZone">
     <div class="import-group">
       <label class="rb-btn primary file-label" for="xmlFileInput">
@@ -41,15 +41,8 @@
         <input id="xmlFileInput" type="file" accept=".xml,.m3u,.m3u8,.txt" multiple hidden>
       </label>
 
-      <label class="rb-btn secondary file-label" for="audioFolderInput" title="Opzionale: seleziona una cartella dove risiedono i file audio su questo PC per attivare l'analisi spettrale Web Audio DSP e il preascolto">
-        <span>📁 Collega Cartella Audio PC</span>
-        <input id="audioFolderInput" type="file" webkitdirectory directory multiple hidden>
-      </label>
-
-      <label class="rb-btn ghost file-label" for="audioFilesInput" title="Più veloce e mirato: seleziona solo i file MP3 specifici della playlist (nessun file inutile caricato)">
-        <span>🎯 Seleziona Solo MP3 Playlist</span>
-        <input id="audioFilesInput" type="file" accept="audio/*,.mp3,.wav,.aiff,.flac,.m4a" multiple hidden>
-      </label>
+      <input id="audioFolderInput" type="file" webkitdirectory directory multiple hidden>
+      <input id="audioFilesInput" type="file" accept="audio/*,.mp3,.wav,.aiff,.flac,.m4a" multiple hidden>
 
       <button id="btnLoadLocalRb" class="rb-btn accent" type="button" hidden title="Legge direttamente dal server Python locale se attivo su questo Mac/PC">
         ⚡ Leggi da Server Locale (CLAP GPU)
@@ -61,8 +54,7 @@
     </div>
 
     <div class="import-status">
-      <span id="loadedSourceInfo">Trascina qui il tuo file <code>rekordbox.xml</code>, playlist <code>.m3u8</code> o <strong>trascina direttamente i soli file MP3 della playlist</strong></span>
-      <span id="linkedAudioBadge" class="audio-linked-pill" hidden>0 file audio collegati</span>
+      <span id="loadedSourceInfo">Trascina qui il tuo file <code>rekordbox.xml</code>, playlist <code>.m3u8</code> o trascina direttamente i file MP3</span>
     </div>
   </section>
 
@@ -91,97 +83,171 @@
     <!-- RIGHT PANEL: PLAYLIST ANALYZER & REORDER -->
     <section class="rb-main-panel board-column">
 
-      <!-- CONTROL CARD: DJSET_ANALYZER OPTIONS -->
+      <!-- WORKFLOW CARD: FLUSSO DI LAVORO DJSET OPTIMIZER -->
       <div class="analyzer-card">
-        <div class="analyzer-top-row">
-          <div>
+        <!-- HEADER DELLA PLAYLIST ATTIVA -->
+        <div class="analyzer-header-row">
+          <div class="active-playlist-info">
             <div class="active-playlist-eyebrow" id="activePlaylistPath">NESSUNA PLAYLIST SELEZIONATA</div>
             <h2 class="active-playlist-title" id="activePlaylistTitle">Seleziona una playlist a sinistra</h2>
           </div>
+          <div class="active-playlist-meta-badges">
+            <span id="headerTrackCountBadge" class="count-pill">0 brani</span>
+            <span id="headerBpmSummaryBadge" class="count-pill ghost">-- BPM</span>
+          </div>
+        </div>
 
-          <div class="analyzer-cta-group">
-            <button id="btnRunAnalyzer" class="rb-btn run-cta" type="button" disabled>
+        <!-- FASE 1: CONFIGURAZIONE PARAMETRI DEL MIX -->
+        <div class="workflow-step-card step-config">
+          <div class="step-header">
+            <div class="step-badge">1</div>
+            <div class="step-title-wrap">
+              <h3 class="step-title">Configurazione Criteri del Set</h3>
+              <p class="step-desc">Definisci profilo musicale AlexGherra DNA, range BPM ammesso, progressione energetica e selettività</p>
+            </div>
+          </div>
+
+          <div class="analyzer-controls-grid">
+            <div class="ctrl-field">
+              <label for="profileSelect">🧬 Profilo Gusti DJ (AlexGherra DNA)</label>
+              <select id="profileSelect" class="rb-select">
+                <option value="auto">✨ Auto-Rileva dal nome Playlist / Genere</option>
+                <option value="all">🌐 Globale (Tutti i Generi — 175 brani)</option>
+                <option value="tech_house">🔊 Tech House (Groove &amp; Sub-Bass)</option>
+                <option value="house">🏠 House (Warm &amp; Vocal Groove)</option>
+                <option value="funky_house">🎷 Funky House</option>
+                <option value="nu_disco">🪩 Nu Disco</option>
+                <option value="techno">⚡ Techno (Peak Driving)</option>
+                <option value="uk_garage_bassline">🇬🇧 UK Garage / Bassline</option>
+              </select>
+            </div>
+
+            <div class="ctrl-field bpm-range-field">
+              <div class="bpm-label-row">
+                <label for="bpmMinInput">🎚️ Range BPM Ammesso</label>
+                <button type="button" id="btnResetBpmRange" class="rb-btn ghost xs" title="Ripristina il range BPM consigliato dal profilo">Auto</button>
+              </div>
+              <div class="bpm-inputs-row">
+                <div class="bpm-input-box">
+                  <span class="bpm-prefix">Min</span>
+                  <input type="number" id="bpmMinInput" class="rb-input-num" min="80" max="180" step="0.5" value="122" placeholder="122">
+                </div>
+                <span class="bpm-sep">—</span>
+                <div class="bpm-input-box">
+                  <span class="bpm-prefix">Max</span>
+                  <input type="number" id="bpmMaxInput" class="rb-input-num" min="80" max="180" step="0.5" value="130" placeholder="130">
+                </div>
+                <span class="bpm-unit">BPM</span>
+              </div>
+            </div>
+
+            <div class="ctrl-field">
+              <label for="curveSelect">📈 Progressione Energetica del Set</label>
+              <select id="curveSelect" class="rb-select">
+                <option value="crescendo">🔥 Warm-up → Peak Crescendo (Consigliato)</option>
+                <option value="harmonic">🎹 Pure Harmonic (Priorità Assoluta Camelot)</option>
+                <option value="wave">🌊 Wave Dinamica (Saliscendi Club)</option>
+                <option value="peak">⚡ Peak-Time Costante (Alta Energia Subito)</option>
+              </select>
+            </div>
+
+            <div class="ctrl-field">
+              <label for="filterModeSelect">🎯 Selettività &amp; Pulizia Playlist (Scarti)</label>
+              <select id="filterModeSelect" class="rb-select">
+                <option value="strict_curation" selected>💎 Ultra-Selettivo (Pulizia Massima — Solo Brani Perfetti)</option>
+                <option value="balanced_filter">⚖️ Selettivo Standard (Scarta Outlier Stilistici, BPM ed Energetici)</option>
+                <option value="push_bottom">🔻 Sposta i brani meno affini in fondo (Bonus Tracks)</option>
+                <option value="keep_all">📦 Conservativo (Mantieni tutti i brani senza scarti)</option>
+              </select>
+            </div>
+
+            <div class="ctrl-field">
+              <label for="openerSelect">🎯 Brano di Apertura (#1 Opener)</label>
+              <select id="openerSelect" class="rb-select">
+                <option value="auto">🤖 Automatico (Miglior Intro Armonico)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- FASE 2: ANALISI AUDIO & RISORSE LOCALI -->
+        <div class="workflow-step-card step-analysis">
+          <div class="step-header">
+            <div class="step-badge">2</div>
+            <div class="step-title-wrap">
+              <h3 class="step-title">Analisi Audio &amp; Preascolto (Web Audio DSP)</h3>
+              <p class="step-desc">Collega i file audio locali (cartella o singoli MP3) per eseguire l'analisi spettrale DSP reale (Sub, Kick, Groove) e abilitare il preascolto</p>
+            </div>
+            <div class="step-header-actions">
+              <span id="linkedAudioBadge" class="audio-linked-pill unlinked">⚠️ 0 file audio collegati</span>
+            </div>
+          </div>
+
+          <div class="analysis-action-bar">
+            <div class="analysis-connect-group">
+              <label class="rb-btn secondary file-label" for="audioFolderInput" title="Seleziona la cartella locale contenente i file MP3/WAV">
+                <span>📁 Collega Cartella MP3 PC</span>
+              </label>
+              <label class="rb-btn ghost file-label" for="audioFilesInput" title="Seleziona solo gli MP3 specifici della playlist">
+                <span>🎯 Seleziona Solo MP3 Playlist</span>
+              </label>
+            </div>
+
+            <div class="analysis-run-group">
+              <button id="btnRunDeepDsp" class="rb-btn accent" type="button" disabled title="Analizza le frequenze reali (Sub-Bass, Kick, Groove, RMS) con Web Audio API">
+                🔬 Esegui Analisi Audio DSP (File Locali)
+              </button>
+            </div>
+          </div>
+
+          <!-- PROGRESS BAR FOR DSP / CLAP ANALYSIS -->
+          <div id="dspProgressBox" class="dsp-progress-box" hidden>
+            <div class="dsp-progress-header">
+              <span id="dspProgressLabel">Analisi spettrale DNA Acustico in corso...</span>
+              <span id="dspProgressPct">0%</span>
+            </div>
+            <div class="dsp-progress-track">
+              <div id="dspProgressFill" class="dsp-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FASE 3: OTTIMIZZAZIONE & AZIONI SET -->
+        <div class="workflow-step-card step-optimize">
+          <div class="step-header">
+            <div class="step-badge">3</div>
+            <div class="step-title-wrap">
+              <h3 class="step-title">Ottimizzazione Ordine &amp; Controllo Set</h3>
+              <p class="step-desc">Applica l'algoritmo euristico 2-Opt sulla Ruota di Camelot per creare una sequenza mixabile perfetta senza salti di tonalità</p>
+            </div>
+          </div>
+
+          <div class="optimize-action-bar">
+            <button id="btnRunAnalyzer" class="rb-btn run-cta main-optimizer-btn" type="button" disabled>
               ⚡ Ottimizza Ordine Brani (Mix Perfetto)
             </button>
-            <button id="btnPlayPlaylist" class="rb-btn success" type="button" disabled title="Avvia la riproduzione continua dell'intera playlist">
+            <button id="btnPlayPlaylist" class="rb-btn success playlist-play-btn" type="button" disabled title="Avvia la riproduzione continua dell'intera playlist">
               ▶ Ascolta Playlist
             </button>
-            <button id="btnRunDeepDsp" class="rb-btn secondary" type="button" disabled title="Analizza le frequenze reali (Sub-Bass, Kick, Groove, RMS) dei file audio collegati dal PC">
-              🔬 Analisi Audio DSP (File Locali)
-            </button>
-          </div>
-        </div>
-
-        <div class="analyzer-controls-grid">
-          <div class="ctrl-field">
-            <label for="profileSelect">🧬 Profilo Gusti DJ (AlexGherra DNA)</label>
-            <select id="profileSelect" class="rb-select">
-              <option value="auto">✨ Auto-Rileva dal nome Playlist / Genere</option>
-              <option value="all">🌐 Globale (Tutti i Generi — 175 brani)</option>
-              <option value="tech_house">🔊 Tech House (Groove &amp; Sub-Bass)</option>
-              <option value="house">🏠 House (Warm &amp; Vocal Groove)</option>
-              <option value="funky_house">🎷 Funky House</option>
-              <option value="nu_disco">🪩 Nu Disco</option>
-              <option value="techno">⚡ Techno (Peak Driving)</option>
-              <option value="uk_garage_bassline">🇬🇧 UK Garage / Bassline</option>
-            </select>
           </div>
 
-          <div class="ctrl-field">
-            <label for="curveSelect">📈 Progressione Energetica del Set</label>
-            <select id="curveSelect" class="rb-select">
-              <option value="crescendo">🔥 Warm-up → Peak Crescendo (Consigliato)</option>
-              <option value="harmonic">🎹 Pure Harmonic (Priorità Assoluta Camelot)</option>
-              <option value="wave">🌊 Wave Dinamica (Saliscendi Club)</option>
-              <option value="peak">⚡ Peak-Time Costante (Alta Energia Subito)</option>
-            </select>
-          </div>
-
-          <div class="ctrl-field">
-            <label for="openerSelect">🎯 Brano di Apertura (#1 Opener)</label>
-            <select id="openerSelect" class="rb-select">
-              <option value="auto">🤖 Automatico (Miglior Intro Armonico)</option>
-            </select>
-          </div>
-
-          <div class="ctrl-field">
-            <label for="filterModeSelect">🎯 Selettività &amp; Pulizia Playlist (Scarti)</label>
-            <select id="filterModeSelect" class="rb-select">
-              <option value="strict_curation" selected>💎 Ultra-Selettivo (Pulizia Massima — Solo Brani Perfetti)</option>
-              <option value="balanced_filter">⚖️ Selettivo Standard (Scarta Outlier Stilistici, BPM ed Energetici)</option>
-              <option value="push_bottom">🔻 Sposta i brani meno affini in fondo (Bonus Tracks)</option>
-              <option value="keep_all">📦 Conservativo (Mantieni tutti i brani senza scarti)</option>
-            </select>
-          </div>
-
-          <div class="ctrl-field bpm-range-field">
-            <div class="bpm-label-row">
-              <label for="bpmMinInput">🎚️ Range BPM Desiderato</label>
-              <button type="button" id="btnResetBpmRange" class="rb-btn ghost xs" title="Ripristina il range BPM consigliato dal profilo">Auto</button>
-            </div>
-            <div class="bpm-inputs-row">
-              <div class="bpm-input-box">
-                <span class="bpm-prefix">Min</span>
-                <input type="number" id="bpmMinInput" class="rb-input-num" min="80" max="180" step="0.5" value="122" placeholder="122">
+          <!-- RE-OPTIMIZE PROPOSAL BANNER (WHEN BPM RANGE CHANGES) -->
+          <div id="reoptBanner" class="reopt-banner" hidden>
+            <div class="reopt-banner-content">
+              <span class="reopt-banner-icon">⚡</span>
+              <div>
+                <strong>Range BPM modificato (<span id="reoptBpmLabel">124–126 BPM</span>)</strong>
+                <p>La composizione della playlist è cambiata in base ai nuovi filtri BPM. Ricalcola l'ordine per adattare il mix e garantire transizioni armoniche perfette.</p>
               </div>
-              <span class="bpm-sep">—</span>
-              <div class="bpm-input-box">
-                <span class="bpm-prefix">Max</span>
-                <input type="number" id="bpmMaxInput" class="rb-input-num" min="80" max="180" step="0.5" value="130" placeholder="130">
-              </div>
-              <span class="bpm-unit">BPM</span>
             </div>
-          </div>
-        </div>
-
-        <!-- PROGRESS BAR FOR DSP / CLAP ANALYSIS -->
-        <div id="dspProgressBox" class="dsp-progress-box" hidden>
-          <div class="dsp-progress-header">
-            <span id="dspProgressLabel">Analisi spettrale DNA Acustico in corso...</span>
-            <span id="dspProgressPct">0%</span>
-          </div>
-          <div class="dsp-progress-track">
-            <div id="dspProgressFill" class="dsp-progress-fill" style="width: 0%"></div>
+            <div class="reopt-banner-actions">
+              <button id="btnReoptimizeFromBanner" class="rb-btn run-cta sm" type="button">
+                ⚡ Ricalcola Mix Perfetto
+              </button>
+              <button id="btnDismissReoptBanner" class="rb-btn ghost sm" type="button" title="Ignora e mantieni ordine corrente">
+                Ignora
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -269,25 +335,6 @@
           <button id="mpClose" class="rb-btn ghost sm mp-close" type="button" title="Ferma e chiudi player">✖</button>
         </div>
         <audio id="previewAudioEl" preload="metadata"></audio>
-      </div>
-
-      <!-- RE-OPTIMIZE PROPOSAL BANNER (WHEN BPM RANGE CHANGES) -->
-      <div id="reoptBanner" class="reopt-banner" hidden>
-        <div class="reopt-banner-content">
-          <span class="reopt-banner-icon">⚡</span>
-          <div>
-            <strong>Range BPM modificato (<span id="reoptBpmLabel">124–126 BPM</span>)</strong>
-            <p>La composizione della playlist è cambiata in base ai nuovi filtri BPM. Ricalcola l'ordine per adattare il mix e garantire transizioni armoniche perfette.</p>
-          </div>
-        </div>
-        <div class="reopt-banner-actions">
-          <button id="btnReoptimizeFromBanner" class="rb-btn run-cta sm" type="button">
-            ⚡ Ricalcola Mix Perfetto
-          </button>
-          <button id="btnDismissReoptBanner" class="rb-btn ghost sm" type="button" title="Ignora e mantieni ordine corrente">
-            Ignora
-          </button>
-        </div>
       </div>
 
       <!-- RESPONSIVE TRACKLIST TABLE -->
