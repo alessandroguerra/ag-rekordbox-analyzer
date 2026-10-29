@@ -1513,6 +1513,7 @@ function selectPlaylist(playlistId) {
   renderPlaylistSidebar();
   updateKpiDisplay();
   renderTracksTable();
+  updateLinkedAudioBadge();
   if (state.rejectedTracks.length > 0) {
     renderRejectedTracks();
     rejectedBox.hidden = false;
@@ -1656,6 +1657,7 @@ async function runPlaylistOptimizer() {
 
     updateKpiDisplay();
     renderTracksTable();
+  updateLinkedAudioBadge();
     renderRejectedTracks();
 
     const exportBadgeSummary = document.getElementById("exportBadgeSummary");
@@ -1883,6 +1885,7 @@ function moveTrackRow(idx, delta) {
   state.afterMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
   updateKpiDisplay();
   renderTracksTable();
+  updateLinkedAudioBadge();
   exportBar.hidden = false;
 }
 
@@ -1918,6 +1921,7 @@ function renderRejectedTracks() {
         state.afterMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
         updateKpiDisplay();
         renderTracksTable();
+  updateLinkedAudioBadge();
         renderRejectedTracks();
       }
     });
@@ -1925,6 +1929,21 @@ function renderRejectedTracks() {
 }
 
 // ─── Local Audio Folder Linking & Web Audio DSP Batch Runner ────────────────
+
+function updateLinkedAudioBadge() {
+  if (state.currentTracks && state.currentTracks.length > 0) {
+    const matched = state.currentTracks.filter(t => !!findMatchingLocalAudioFile(t)).length;
+    linkedAudioBadge.hidden = false;
+    linkedAudioBadge.textContent = `🎯 ${matched} / ${state.currentTracks.length} brani della playlist agganciati`;
+    btnRunDeepDsp.disabled = (matched === 0 && !state.localServerAvailable);
+  } else {
+    const uniqueFiles = new Set(Array.from(state.localAudioFiles.values())).size;
+    if (uniqueFiles > 0) {
+      linkedAudioBadge.hidden = false;
+      linkedAudioBadge.textContent = `📁 ${uniqueFiles} file indicizzati nella cartella base`;
+    }
+  }
+}
 
 function indexLocalAudioFiles(fileList) {
   const allowed = /\.(mp3|wav|aiff|aif|flac|m4a|ogg)$/i;
@@ -1944,12 +1963,17 @@ function indexLocalAudioFiles(fileList) {
     count++;
   });
 
-  if (count > 0) {
-    linkedAudioBadge.hidden = false;
-    linkedAudioBadge.textContent = `🎧 ${count} file audio locali collegati`;
-    btnRunDeepDsp.disabled = state.currentTracks.length === 0;
+  const uniqueFiles = new Set(Array.from(state.localAudioFiles.values())).size;
+  if (uniqueFiles > 0) {
+    updateLinkedAudioBadge();
     renderTracksTable();
-    showToast(`🎧 Collegati ${count} file audio locali per Web Audio DSP e riproduzione!`);
+  updateLinkedAudioBadge();
+    if (state.currentTracks.length > 0) {
+      const matched = state.currentTracks.filter(t => !!findMatchingLocalAudioFile(t)).length;
+      showToast(`🎯 Agganciati automaticamente ${matched} su ${state.currentTracks.length} brani della playlist!`);
+    } else {
+      showToast(`📁 Cartella base collegata con ${uniqueFiles} file. Seleziona una playlist per agganciare i brani.`);
+    }
   } else {
     showToast("⚠️ Nessun file audio (.mp3/.wav/.aiff/.flac) trovato nella cartella selezionata.");
   }
@@ -2106,6 +2130,7 @@ function playTrackAtIndex(idx, autoStart = true) {
   }
 
   renderTracksTable();
+  updateLinkedAudioBadge();
   scrollActiveTrackIntoView(idx);
 }
 
@@ -2122,6 +2147,7 @@ function togglePlayTrackAtIndex(idx) {
       if (mpPlayPause) mpPlayPause.textContent = "▶ Play";
     }
     renderTracksTable();
+  updateLinkedAudioBadge();
     return;
   }
 
@@ -2175,6 +2201,7 @@ function togglePlayPause() {
     if (mpPlayPause) mpPlayPause.textContent = "▶ Play";
   }
   renderTracksTable();
+  updateLinkedAudioBadge();
 }
 
 function stopPlayback() {
@@ -2191,6 +2218,7 @@ function stopPlayback() {
   state.isPlaylistMode = false;
   miniPlayerBar.hidden = true;
   renderTracksTable();
+  updateLinkedAudioBadge();
 }
 
 function togglePlayPlaylist() {
@@ -2593,6 +2621,7 @@ profileSelect.addEventListener("change", () => {
       state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
       updateKpiDisplay();
       renderTracksTable();
+  updateLinkedAudioBadge();
     }
   }
 });
@@ -2615,6 +2644,7 @@ btnResetOrder.addEventListener("click", () => {
   state.afterMetrics = null;
   updateKpiDisplay();
   renderTracksTable();
+  updateLinkedAudioBadge();
   exportBar.hidden = true;
   rejectedBox.hidden = true;
   showToast("↩️ Ripristinato ordine originale Rekordbox");
@@ -2656,10 +2686,12 @@ if (previewAudioEl) {
   previewAudioEl.addEventListener("play", () => {
     if (mpPlayPause) mpPlayPause.textContent = "⏸ Pausa";
     renderTracksTable();
+  updateLinkedAudioBadge();
   });
   previewAudioEl.addEventListener("pause", () => {
     if (mpPlayPause) mpPlayPause.textContent = "▶ Play";
     renderTracksTable();
+  updateLinkedAudioBadge();
   });
 }
 if (mpScrubber) {
