@@ -538,10 +538,10 @@ function curateAndFilterPlaylistOutliers(tracks, profile, filterMode, plName, op
       reasons.push(`BPM ${bpm.toFixed(1)} fuori range armonico (${(medianBpm - bpmTolerance).toFixed(1)}–${(medianBpm + bpmTolerance).toFixed(1)})`);
     }
 
-    // 4. DNA Fit sotto soglia di selettività (Soglia 80% in modalità Ultra-Selettiva)
-    const fitMin = isStrict ? 80 : 70;
-    if (t.dnaFitPct < fitMin) {
-      reasons.push(`Affinità DNA acustico insufficiente (${t.dnaFitPct}% < ${fitMin}%)`);
+    // 4. DNA Fit sotto soglia di selettività (Taglio rigido a 80%: nessun brano < 80% è ammesso nel mix)
+    const fitMin = 80;
+    if (t.dnaFitPct != null && t.dnaFitPct < fitMin) {
+      reasons.push(`Affinità DNA acustico insufficiente (${t.dnaFitPct}% < 80%)`);
     }
 
     // 5. Orfano Armonico Camelot (nessun brano compatibile nel set)
@@ -560,19 +560,6 @@ function curateAndFilterPlaylistOutliers(tracks, profile, filterMode, plName, op
     } else {
       mainPool.push(t);
     }
-  }
-
-  // Salvaguardia: se il filtro svuotasse la playlist (< 6 brani), mantieni almeno i migliori
-  if (mainPool.length < 6 && tracks.length >= 6) {
-    const sortedByFit = [...tracks].sort((a, b) => b.dnaFitPct - a.dnaFitPct);
-    const safeCount = Math.max(6, Math.floor(tracks.length * 0.6));
-    const safeMain = sortedByFit.slice(0, safeCount);
-    const safeMainIds = new Set(safeMain.map(x => x.id));
-    const safeLow = tracks.filter(x => !safeMainIds.has(x.id)).map(x => {
-      x.rejectReason = x.rejectReason || `Affinità DNA inferiore alla selezione (${x.dnaFitPct}%)`;
-      return x;
-    });
-    return { mainPool: safeMain, lowPool: safeLow };
   }
 
   return { mainPool, lowPool };
@@ -1604,6 +1591,7 @@ function selectPlaylist(playlistId) {
 
   const seps = [];
   const duplicates = [];
+  const lowDna = [];
   const playable = [];
   const seenSignatures = new Map();
 
@@ -1636,10 +1624,20 @@ function selectPlaylist(playlistId) {
     for (const s of sigs) {
       seenSignatures.set(s, t);
     }
+
+    // Scarto immediato se il DNA Fit è inferiore all'80%
+    if (t.dnaFitPct != null && t.dnaFitPct < 80) {
+      lowDna.push({
+        ...t,
+        rejectReason: `Affinità DNA acustico insufficiente (${t.dnaFitPct}% < 80%)`
+      });
+      continue;
+    }
+
     playable.push(t);
   }
 
-  state.rejectedTracks = [...seps, ...duplicates];
+  state.rejectedTracks = [...seps, ...duplicates, ...lowDna];
   state.originalTracks = playable;
   state.currentTracks = state.originalTracks.map(t => ({ ...t }));
   state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
@@ -1668,6 +1666,7 @@ function selectPlaylist(playlistId) {
   const badges = [];
   if (seps.length > 0) badges.push(`🧹 ${seps.length} separatore escluso`);
   if (duplicates.length > 0) badges.push(`✂️ ${duplicates.length} duplicati rimossi`);
+  if (lowDna.length > 0) badges.push(`🧬 ${lowDna.length} scartati (DNA Fit < 80%)`);
   const badgeText = badges.length > 0 ? ` • ${badges.join(" • ")}` : "";
   activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${badgeText})`;
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
@@ -1803,9 +1802,8 @@ async function runPlaylistOptimizer() {
       finalAccepted = kept;
     }
 
-    const existingExcluded = (state.rejectedTracks || []).filter(t => 
-      isSeparatorTrack(t) || (t.rejectReason && t.rejectReason.includes("duplicata"))
-    );
+    const acceptedIds = new Set(finalAccepted.map(t => String(t.id)));
+    const existingExcluded = (state.rejectedTracks || []).filter(t => !acceptedIds.has(String(t.id)));
 
     if (filterMode === "push_bottom" && lowPool.length > 0) {
       const orderedLow = await sequenceDjSetOptimalAsync(lowPool, curveMode, "auto");
@@ -1817,7 +1815,13 @@ async function runPlaylistOptimizer() {
     } else {
       // strict_curation e balanced_filter
       state.currentTracks = finalAccepted;
-      state.rejectedTracks = [...existingExcluded, ...lowPool, ...postPruned];
+      const rejMap = new Map();
+      [...existingExcluded, ...lowPool, ...postPruned].forEach(t => {
+        if (t && !acceptedIds.has(String(t.id))) {
+          rejMap.set(String(t.id), t);
+        }
+      });
+      state.rejectedTracks = Array.from(rejMap.values());
     }
 
     // STEP 4: Validazione Transizioni e Riepilogo Finale
@@ -2818,21 +2822,24 @@ curveSelect.addEventListener("change", () => {
   }
 });
 
+filterModeSelect.addEventListener("change", () => {
+  if (state.activePlaylistId) {
+    if (state.isOptimized) {
+      runPlaylistOptimizer();
+    } else {
+      selectPlaylist(state.activePlaylistId);
+    }
+  }
+});
+
 btnExportXml.addEventListener("click", () => exportUpdatedRekordboxXml());
 btnExportM3u8.addEventListener("click", () => exportM3u8Playlist());
 btnExportJson.addEventListener("click", () => exportJsonReport());
 
 btnResetOrder.addEventListener("click", () => {
-  state.currentTracks = state.originalTracks.map(t => ({ ...t }));
-  state.rejectedTracks = [];
-  state.isOptimized = false;
-  state.beforeMetrics = computeSetSummaryMetrics(state.currentTracks, curveSelect.value);
-  state.afterMetrics = null;
-  updateKpiDisplay();
-  renderTracksTable();
-  updateLinkedAudioBadge();
-  exportBar.hidden = true;
-  rejectedBox.hidden = true;
+  if (state.activePlaylistId) {
+    selectPlaylist(state.activePlaylistId);
+  }
   showToast("↩️ Ripristinato ordine originale Rekordbox");
 });
 
