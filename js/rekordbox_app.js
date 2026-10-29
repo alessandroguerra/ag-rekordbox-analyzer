@@ -71,7 +71,10 @@ const state = {
   localServerAvailable: false,
   localServerUrl: "http://localhost:5060",
   playingTrackId: null,
-  currentObjectUrl: null
+  currentTrackIndex: -1,
+  currentObjectUrl: null,
+  isPlaylistMode: false,
+  pendingPlayTrackIndex: null
 };
 
 // ─── DOM References ──────────────────────────────────────────────────────────
@@ -92,6 +95,7 @@ const playlistTree = document.getElementById("playlistTree");
 const activePlaylistPath = document.getElementById("activePlaylistPath");
 const activePlaylistTitle = document.getElementById("activePlaylistTitle");
 const btnRunAnalyzer = document.getElementById("btnRunAnalyzer");
+const btnPlayPlaylist = document.getElementById("btnPlayPlaylist");
 const btnRunDeepDsp = document.getElementById("btnRunDeepDsp");
 
 const profileSelect = document.getElementById("profileSelect");
@@ -130,12 +134,17 @@ const rejectedCount = document.getElementById("rejectedCount");
 const rejectedList = document.getElementById("rejectedList");
 
 const miniPlayerBar = document.getElementById("miniPlayerBar");
+const mpBadge = document.getElementById("mpBadge");
+const mpPosBadge = document.getElementById("mpPosBadge");
 const mpTitle = document.getElementById("mpTitle");
 const mpArtist = document.getElementById("mpArtist");
+const mpPrev = document.getElementById("mpPrev");
 const mpPlayPause = document.getElementById("mpPlayPause");
+const mpNext = document.getElementById("mpNext");
 const mpJumpDrop = document.getElementById("mpJumpDrop");
 const mpScrubber = document.getElementById("mpScrubber");
 const mpTime = document.getElementById("mpTime");
+const mpClose = document.getElementById("mpClose");
 const previewAudioEl = document.getElementById("previewAudioEl");
 
 const guideModal = document.getElementById("guideModal");
@@ -1462,6 +1471,7 @@ function selectPlaylist(playlistId) {
   activePlaylistTitle.textContent = `${pl.name} (${state.currentTracks.length} brani${badgeText})`;
   btnRunAnalyzer.disabled = state.currentTracks.length < 2;
   btnRunAnalyzer.innerHTML = "⚡ Ottimizza Ordine Brani (Mix Perfetto)";
+  if (btnPlayPlaylist) btnPlayPlaylist.disabled = state.currentTracks.length === 0;
   btnRunDeepDsp.disabled = state.localAudioFiles.size === 0 || state.currentTracks.length === 0;
 
   populateOpenerSelect(state.originalTracks);
@@ -1626,6 +1636,7 @@ async function runPlaylistOptimizer() {
   } finally {
     if (overlay) overlay.hidden = true;
     btnRunAnalyzer.disabled = false;
+    if (btnPlayPlaylist) btnPlayPlaylist.disabled = state.currentTracks.length === 0;
     btnRunAnalyzer.innerHTML = state.isOptimized
       ? "⚡ Ricalcola Mix Perfetto"
       : origBtnHtml;
@@ -1675,18 +1686,43 @@ function updateKpiDisplay() {
   kpiDurationSub.textContent = `Durata stimata: ${formatTotalDuration(m.totalDurationSec)}`;
 }
 
+function normalizeAudioKey(str) {
+  return String(str || "")
+    .toLowerCase()
+    .replace(/\.[a-z0-9]{2,4}$/i, "")
+    .replace(/^\d{1,4}\s*[-._]\s*/, "") // Rimuove prefissi come "117 - ", "041. "
+    .replace(/^[a-z0-9()]+-e\d{1,2}-\[\d{4}\]-/i, "") // Rimuove prefissi AlexGherra tipo "TechHouse-E6-[2026]-"
+    .replace(/\s*\([0-9]+\)$/, "") // Rimuove suffissi duplicati "(1)", "(2)"
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function findMatchingLocalAudioFile(track) {
-  if (state.localAudioFiles.size === 0) return null;
+  if (!track || state.localAudioFiles.size === 0) return null;
+
   if (track.localPath) {
     const base = track.localPath.split(/[\\/]/).pop().toLowerCase();
     if (state.localAudioFiles.has(base)) return state.localAudioFiles.get(base);
     const stem = cleanFileStem(base);
     if (state.localAudioFiles.has(stem)) return state.localAudioFiles.get(stem);
+    const norm = normalizeAudioKey(base);
+    if (norm && state.localAudioFiles.has(norm)) return state.localAudioFiles.get(norm);
+    const cleanStem = stem.replace(/^\d{1,4}\s*[-._]\s*/, "").replace(/^[a-z0-9()]+-e\d{1,2}-\[\d{4}\]-/i, "").trim();
+    if (cleanStem && state.localAudioFiles.has(cleanStem)) return state.localAudioFiles.get(cleanStem);
   }
+
   const byTitle = cleanFileStem(`${track.artist} - ${track.title}`);
   if (state.localAudioFiles.has(byTitle)) return state.localAudioFiles.get(byTitle);
+
+  const normArtTitle = normalizeAudioKey(`${track.artist} ${track.title}`);
+  if (normArtTitle && state.localAudioFiles.has(normArtTitle)) return state.localAudioFiles.get(normArtTitle);
+
   const titleOnly = cleanFileStem(track.title);
   if (state.localAudioFiles.has(titleOnly)) return state.localAudioFiles.get(titleOnly);
+
+  const normTitle = normalizeAudioKey(track.title);
+  if (normTitle && state.localAudioFiles.has(normTitle)) return state.localAudioFiles.get(normTitle);
+
   return null;
 }
 
@@ -1729,13 +1765,12 @@ function renderTracksTable() {
       `;
     }
 
-    const hasAudio = !!findMatchingLocalAudioFile(t);
-    const playBtnHtml = hasAudio
-      ? `<button type="button" class="rb-btn ghost sm btn-play-row" data-idx="${idx}" title="Preascolta brano locale">${state.playingTrackId === t.id ? "⏸" : "▶"}</button>`
-      : "";
+    const isThisTrackActive = state.playingTrackId === t.id;
+    const isPlayingThis = isThisTrackActive && previewAudioEl && !previewAudioEl.paused;
+    const playBtnHtml = `<button type="button" class="rb-btn ghost sm btn-play-row ${isThisTrackActive ? "active" : ""}" data-idx="${idx}" title="${isPlayingThis ? "Metti in pausa" : "Riproduci brano / anteprima"}">${isPlayingThis ? "⏸" : "▶"}</button>`;
 
     html += `
-      <tr>
+      <tr class="${isThisTrackActive ? "playing-row" : ""}">
         <th scope="row">
           <div class="pos-wrap">
             <span class="pos-num">${String(pos).padStart(2, "0")}</span>
@@ -1861,8 +1896,16 @@ function indexLocalAudioFiles(fileList) {
   let count = 0;
   Array.from(fileList).forEach(file => {
     if (!allowed.test(file.name)) return;
-    state.localAudioFiles.set(file.name.toLowerCase(), file);
-    state.localAudioFiles.set(cleanFileStem(file.name), file);
+    const lower = file.name.toLowerCase();
+    const stem = cleanFileStem(file.name);
+    const norm = normalizeAudioKey(file.name);
+
+    state.localAudioFiles.set(lower, file);
+    state.localAudioFiles.set(stem, file);
+    if (norm) state.localAudioFiles.set(norm, file);
+
+    const cleanStem = stem.replace(/^\d{1,4}\s*[-._]\s*/, "").replace(/^[a-z0-9()]+-e\d{1,2}-\[\d{4}\]-/i, "").trim();
+    if (cleanStem) state.localAudioFiles.set(cleanStem, file);
     count++;
   });
 
@@ -1871,7 +1914,7 @@ function indexLocalAudioFiles(fileList) {
     linkedAudioBadge.textContent = `🎧 ${count} file audio locali collegati`;
     btnRunDeepDsp.disabled = state.currentTracks.length === 0;
     renderTracksTable();
-    showToast(`🎧 Collegati ${count} file audio locali per Web Audio DSP e preascolto!`);
+    showToast(`🎧 Collegati ${count} file audio locali per Web Audio DSP e riproduzione!`);
   } else {
     showToast("⚠️ Nessun file audio (.mp3/.wav/.aiff/.flac) trovato nella cartella selezionata.");
   }
@@ -1934,42 +1977,191 @@ async function runLocalWebDspOnCurrentPlaylist(triggerOptimizeAfter = true) {
   }
 }
 
-// ─── Audio Preview Player ────────────────────────────────────────────────────
+// ─── Complete Audio & Playlist Player Engine ────────────────────────────────
 
-function togglePlayTrackAtIndex(idx) {
-  const track = state.currentTracks[idx];
-  if (!track) return;
+function getTrackAudioSource(track) {
+  if (!track) return null;
+
+  // 1. File locale collegato nella memoria del browser
   const file = findMatchingLocalAudioFile(track);
-  if (!file) {
-    showToast("Collega la cartella audio del PC per ascoltare l'anteprima.");
+  if (file) {
+    return {
+      type: "blob",
+      file,
+      url: URL.createObjectURL(file)
+    };
+  }
+
+  // 2. Server locale Python (se attivo e file presente su disco)
+  if (state.localServerAvailable && (track.localPath || track.location)) {
+    const rawPath = track.localPath || decodeRekordboxLocation(track.location);
+    if (rawPath) {
+      return {
+        type: "server",
+        url: `${state.localServerUrl}/api/stream?path=${encodeURIComponent(rawPath)}`
+      };
+    }
+  }
+
+  return null;
+}
+
+function promptForAudioFolder(pendingIdx = 0, isPlaylist = true) {
+  state.pendingPlayTrackIndex = pendingIdx;
+  state.isPlaylistMode = isPlaylist;
+  showToast("🎧 Per ascoltare i brani, seleziona la cartella con i file MP3/WAV sul tuo PC.");
+  audioFolderInput.click();
+}
+
+function scrollActiveTrackIntoView(idx) {
+  const rows = tracksTableBody.querySelectorAll("tr");
+  if (rows && rows[idx]) {
+    rows[idx].scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function playTrackAtIndex(idx, autoStart = true) {
+  if (!state.currentTracks || state.currentTracks.length === 0) return;
+
+  if (idx < 0 || idx >= state.currentTracks.length) {
+    stopPlayback();
+    showToast("🏁 Riproduzione playlist completata!");
     return;
   }
 
-  if (state.playingTrackId === track.id) {
-    if (previewAudioEl.paused) {
-      previewAudioEl.play();
-      mpPlayPause.textContent = "⏸ Pausa";
-    } else {
-      previewAudioEl.pause();
-      mpPlayPause.textContent = "▶ Play";
-    }
-    renderTracksTable();
+  const track = state.currentTracks[idx];
+  const audioSrc = getTrackAudioSource(track);
+
+  if (!audioSrc) {
+    promptForAudioFolder(idx, state.isPlaylistMode);
     return;
   }
 
   if (state.currentObjectUrl) {
     URL.revokeObjectURL(state.currentObjectUrl);
+    state.currentObjectUrl = null;
   }
-  state.currentObjectUrl = URL.createObjectURL(file);
+
+  if (audioSrc.type === "blob") {
+    state.currentObjectUrl = audioSrc.url;
+  }
+
+  state.currentTrackIndex = idx;
   state.playingTrackId = track.id;
 
-  previewAudioEl.src = state.currentObjectUrl;
+  previewAudioEl.src = audioSrc.url;
   miniPlayerBar.hidden = false;
-  mpTitle.textContent = track.title;
-  mpArtist.textContent = `${track.artist} (${track.camelot} • ${track.bpm} BPM)`;
-  mpPlayPause.textContent = "⏸ Pausa";
-  previewAudioEl.play().catch(() => {});
+
+  if (mpBadge) mpBadge.textContent = state.isPlaylistMode ? "🎧 PLAYLIST" : "🎧 PREVIEW";
+  if (mpPosBadge) mpPosBadge.textContent = `#${String(idx + 1).padStart(2, "0")} / ${state.currentTracks.length}`;
+  if (mpTitle) mpTitle.textContent = track.title;
+  if (mpArtist) mpArtist.textContent = `${track.artist} (${track.camelot} • ${Number(track.bpm).toFixed(1)} BPM)`;
+  if (mpPlayPause) mpPlayPause.textContent = "⏸ Pausa";
+
+  if (autoStart) {
+    previewAudioEl.play().catch(err => {
+      console.warn("Autoplay audio bloccato dal browser:", err);
+    });
+  }
+
   renderTracksTable();
+  scrollActiveTrackIntoView(idx);
+}
+
+function togglePlayTrackAtIndex(idx) {
+  if (idx < 0 || idx >= state.currentTracks.length) return;
+  const track = state.currentTracks[idx];
+
+  if (state.playingTrackId === track.id) {
+    if (previewAudioEl.paused) {
+      previewAudioEl.play();
+      if (mpPlayPause) mpPlayPause.textContent = "⏸ Pausa";
+    } else {
+      previewAudioEl.pause();
+      if (mpPlayPause) mpPlayPause.textContent = "▶ Play";
+    }
+    renderTracksTable();
+    return;
+  }
+
+  state.isPlaylistMode = false;
+  playTrackAtIndex(idx, true);
+}
+
+function playNextTrack() {
+  if (!state.currentTracks || state.currentTracks.length === 0) return;
+  if (state.currentTrackIndex < 0) {
+    playTrackAtIndex(0, true);
+    return;
+  }
+  const nextIdx = state.currentTrackIndex + 1;
+  if (nextIdx < state.currentTracks.length) {
+    playTrackAtIndex(nextIdx, true);
+  } else {
+    stopPlayback();
+    showToast("🏁 Fine della playlist!");
+  }
+}
+
+function playPrevTrack() {
+  if (!state.currentTracks || state.currentTracks.length === 0) return;
+  if (state.currentTrackIndex <= 0) {
+    if (previewAudioEl && previewAudioEl.currentTime > 3) {
+      previewAudioEl.currentTime = 0;
+    }
+    return;
+  }
+  if (previewAudioEl && previewAudioEl.currentTime > 4) {
+    previewAudioEl.currentTime = 0;
+  } else {
+    playTrackAtIndex(state.currentTrackIndex - 1, true);
+  }
+}
+
+function togglePlayPause() {
+  if (!previewAudioEl.src || state.currentTrackIndex < 0) {
+    if (state.currentTracks.length > 0) {
+      state.isPlaylistMode = true;
+      playTrackAtIndex(0, true);
+    }
+    return;
+  }
+  if (previewAudioEl.paused) {
+    previewAudioEl.play();
+    if (mpPlayPause) mpPlayPause.textContent = "⏸ Pausa";
+  } else {
+    previewAudioEl.pause();
+    if (mpPlayPause) mpPlayPause.textContent = "▶ Play";
+  }
+  renderTracksTable();
+}
+
+function stopPlayback() {
+  if (previewAudioEl) {
+    previewAudioEl.pause();
+    previewAudioEl.removeAttribute("src");
+  }
+  if (state.currentObjectUrl) {
+    URL.revokeObjectURL(state.currentObjectUrl);
+    state.currentObjectUrl = null;
+  }
+  state.playingTrackId = null;
+  state.currentTrackIndex = -1;
+  state.isPlaylistMode = false;
+  miniPlayerBar.hidden = true;
+  renderTracksTable();
+}
+
+function togglePlayPlaylist() {
+  if (!state.currentTracks || state.currentTracks.length === 0) return;
+  state.isPlaylistMode = true;
+
+  if (state.currentTrackIndex >= 0 && state.playingTrackId) {
+    togglePlayPause();
+    return;
+  }
+
+  playTrackAtIndex(0, true);
 }
 
 // ─── Export Functions for Rekordbox (XML, M3U8, JSON) ────────────────────────
@@ -2282,6 +2474,11 @@ xmlFileInput.addEventListener("change", async (e) => {
 audioFolderInput.addEventListener("change", (e) => {
   if (e.target.files && e.target.files.length > 0) {
     indexLocalAudioFiles(e.target.files);
+    if (state.pendingPlayTrackIndex !== null && state.pendingPlayTrackIndex !== undefined) {
+      const idx = state.pendingPlayTrackIndex;
+      state.pendingPlayTrackIndex = null;
+      playTrackAtIndex(idx, true);
+    }
   }
 });
 
@@ -2356,32 +2553,55 @@ btnResetOrder.addEventListener("click", () => {
   showToast("↩️ Ripristinato ordine originale Rekordbox");
 });
 
-// Mini Player controls
-mpPlayPause.addEventListener("click", () => {
-  if (previewAudioEl.paused) {
-    previewAudioEl.play();
-    mpPlayPause.textContent = "⏸ Pausa";
-  } else {
-    previewAudioEl.pause();
-    mpPlayPause.textContent = "▶ Play";
-  }
-});
-mpJumpDrop.addEventListener("click", () => {
-  if (previewAudioEl.duration) {
-    previewAudioEl.currentTime = Math.min(previewAudioEl.duration - 5, previewAudioEl.currentTime + 45);
-  }
-});
-previewAudioEl.addEventListener("timeupdate", () => {
-  if (previewAudioEl.duration) {
-    mpScrubber.value = String((previewAudioEl.currentTime / previewAudioEl.duration) * 100);
-    mpTime.textContent = formatDuration(previewAudioEl.currentTime);
-  }
-});
-mpScrubber.addEventListener("input", () => {
-  if (previewAudioEl.duration) {
-    previewAudioEl.currentTime = (parseFloat(mpScrubber.value) / 100) * previewAudioEl.duration;
-  }
-});
+// Mini Player & Playlist controls
+if (btnPlayPlaylist) {
+  btnPlayPlaylist.addEventListener("click", () => togglePlayPlaylist());
+}
+if (mpPlayPause) {
+  mpPlayPause.addEventListener("click", () => togglePlayPause());
+}
+if (mpPrev) {
+  mpPrev.addEventListener("click", () => playPrevTrack());
+}
+if (mpNext) {
+  mpNext.addEventListener("click", () => playNextTrack());
+}
+if (mpClose) {
+  mpClose.addEventListener("click", () => stopPlayback());
+}
+if (mpJumpDrop) {
+  mpJumpDrop.addEventListener("click", () => {
+    if (previewAudioEl.duration) {
+      previewAudioEl.currentTime = Math.min(previewAudioEl.duration - 5, previewAudioEl.currentTime + 45);
+    }
+  });
+}
+if (previewAudioEl) {
+  previewAudioEl.addEventListener("timeupdate", () => {
+    if (previewAudioEl.duration) {
+      mpScrubber.value = String((previewAudioEl.currentTime / previewAudioEl.duration) * 100);
+      mpTime.textContent = `${formatDuration(previewAudioEl.currentTime)} / ${formatDuration(previewAudioEl.duration)}`;
+    }
+  });
+  previewAudioEl.addEventListener("ended", () => {
+    playNextTrack();
+  });
+  previewAudioEl.addEventListener("play", () => {
+    if (mpPlayPause) mpPlayPause.textContent = "⏸ Pausa";
+    renderTracksTable();
+  });
+  previewAudioEl.addEventListener("pause", () => {
+    if (mpPlayPause) mpPlayPause.textContent = "▶ Play";
+    renderTracksTable();
+  });
+}
+if (mpScrubber) {
+  mpScrubber.addEventListener("input", () => {
+    if (previewAudioEl.duration) {
+      previewAudioEl.currentTime = (parseFloat(mpScrubber.value) / 100) * previewAudioEl.duration;
+    }
+  });
+}
 
 // Guide Modal
 btnShowGuide.addEventListener("click", () => { guideModal.hidden = false; });

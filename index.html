@@ -95,6 +95,9 @@
             <button id="btnRunAnalyzer" class="rb-btn run-cta" type="button" disabled>
               ⚡ Ottimizza Ordine Brani (Mix Perfetto)
             </button>
+            <button id="btnPlayPlaylist" class="rb-btn success" type="button" disabled title="Avvia la riproduzione continua dell'intera playlist">
+              ▶ Ascolta Playlist
+            </button>
             <button id="btnRunDeepDsp" class="rb-btn secondary" type="button" disabled title="Analizza le frequenze reali (Sub-Bass, Kick, Groove, RMS) dei file audio collegati dal PC">
               🔬 Analisi Audio DSP (File Locali)
             </button>
@@ -218,18 +221,24 @@
         </div>
       </div>
 
-      <!-- MINI AUDIO PREVIEW BAR (VISIBLE WHEN PLAYING A LOCAL FILE) -->
+      <!-- MINI AUDIO PREVIEW & PLAYLIST PLAYER BAR -->
       <div id="miniPlayerBar" class="mini-player-bar" hidden>
         <div class="mp-info">
-          <span class="mp-badge">🎧 PREVIEW</span>
-          <strong id="mpTitle">--</strong>
-          <span id="mpArtist" class="mp-artist">--</span>
+          <span class="mp-badge" id="mpBadge">🎧 PLAYLIST</span>
+          <span class="mp-pos" id="mpPosBadge">#01</span>
+          <div class="mp-meta">
+            <strong id="mpTitle">--</strong>
+            <span id="mpArtist" class="mp-artist">--</span>
+          </div>
         </div>
         <div class="mp-controls">
+          <button id="mpPrev" class="rb-btn ghost sm" type="button" title="Brano Precedente">⏮ Prec</button>
           <button id="mpPlayPause" class="rb-btn ghost sm" type="button">⏸ Pausa</button>
-          <button id="mpJumpDrop" class="rb-btn ghost sm" type="button">⏩ Drop (+45s)</button>
-          <input id="mpScrubber" type="range" min="0" max="100" step="0.5" value="0" class="mp-scrubber">
-          <span id="mpTime" class="mp-time">00:00</span>
+          <button id="mpNext" class="rb-btn ghost sm" type="button" title="Brano Successivo">⏭ Succ</button>
+          <button id="mpJumpDrop" class="rb-btn ghost sm" type="button" title="Salta al drop a +45s">⏩ Drop (+45s)</button>
+          <input id="mpScrubber" type="range" min="0" max="100" step="0.5" value="0" class="mp-scrubber" title="Trascina per scorrere la traccia">
+          <span id="mpTime" class="mp-time">00:00 / 00:00</span>
+          <button id="mpClose" class="rb-btn ghost sm mp-close" type="button" title="Ferma e chiudi player">✖</button>
         </div>
         <audio id="previewAudioEl" preload="metadata"></audio>
       </div>

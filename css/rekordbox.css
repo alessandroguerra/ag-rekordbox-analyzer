@@ -608,7 +608,7 @@ code {
   gap: 8px;
 }
 
-/* ─── MINI AUDIO PREVIEW BAR ─────────────────────────────────────────────── */
+/* ─── MINI AUDIO PREVIEW & PLAYLIST PLAYER BAR ───────────────────────────── */
 .mini-player-bar {
   display: flex;
   align-items: center;
@@ -617,15 +617,24 @@ code {
   gap: 12px;
   padding: 10px 14px;
   border-radius: var(--radius-md);
-  background: linear-gradient(90deg, rgba(0, 210, 190, 0.13), rgba(59, 130, 246, 0.13));
+  background: linear-gradient(90deg, rgba(0, 210, 190, 0.16), rgba(59, 130, 246, 0.16));
   border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .mp-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 0.84rem;
+  min-width: 240px;
+  flex: 1;
 }
 
 .mp-badge {
@@ -635,29 +644,72 @@ code {
   font-weight: 800;
   background: var(--accent-cyan);
   color: #041014;
+  white-space: nowrap;
+}
+
+.mp-pos {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 210, 190, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.mp-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mp-artist {
   color: var(--text-muted);
+  font-size: 0.76rem;
 }
 
 .mp-controls {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  max-width: 460px;
+  flex: 2;
+  min-width: 320px;
 }
 
 .mp-scrubber {
   flex: 1;
+  min-width: 90px;
   accent-color: var(--accent-cyan);
+  cursor: pointer;
 }
 
 .mp-time {
   font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mp-close {
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.mp-close:hover {
+  color: #ef4444;
+}
+
+/* Evidenziazione visiva riga in riproduzione */
+tr.playing-row {
+  background: rgba(0, 210, 190, 0.18) !important;
+  box-shadow: inset 4px 0 0 var(--accent-cyan);
+}
+
+tr.playing-row .pos-num {
+  color: var(--accent-cyan);
+  font-weight: 800;
 }
 
 /* ─── RESPONSIVE TABLE (modern-web-guidance: responsive-table) ───────────── */
